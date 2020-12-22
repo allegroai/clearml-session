@@ -2,7 +2,7 @@
 
 <a href="https://app.community.clear.ml"><img src="https://github.com/allegroai/clearml/blob/master/docs/clearml-logo.svg?raw=true" width="250px"></a>
 
-## **`clearml-session`  CLI for launching JupyterLab / VSCode on a remote machine**
+## **`clearml-session` </br> CLI for launching JupyterLab / VSCode on a remote machine**
 
 
 [![GitHub license](https://img.shields.io/github/license/allegroai/clearml-session.svg)](https://img.shields.io/github/license/allegroai/clearml-session.svg)
