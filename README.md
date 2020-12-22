@@ -1,4 +1,4 @@
-# `clearml-session` - CLI for launching JupyterLab / VSCode on a remote machine
+# `clearml-session`</br>CLI for launching JupyterLab / VSCode on a remote machine
 
 **`clearml-session`** is a utility for launching detachable remote interactive sessions (MacOS, Windows, Linux)
 
