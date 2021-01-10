@@ -3,6 +3,8 @@ import os
 import socket
 import subprocess
 import sys
+from time import sleep
+
 import requests
 from copy import deepcopy
 from tempfile import mkstemp
@@ -81,7 +83,7 @@ __allocated_ports = []
 def get_free_port(range_min, range_max):
     global __allocated_ports
     used_ports = [i.laddr.port for i in psutil.net_connections()]
-    port = [i for i in range(range_min, range_max) if i not in used_ports and i not in __allocated_ports][0]
+    port = next(i for i in range(range_min, range_max) if i not in used_ports and i not in __allocated_ports)
     __allocated_ports.append(port)
     return port
 
@@ -172,7 +174,7 @@ def monitor_jupyter_server(fd, local_filename, process, task, jupyter_port, host
         for line in new_lines:
             if "http://" not in line and "https://" not in line:
                 continue
-            parts = line.split('/?token=', 1)
+            parts = line.split('?token=', 1)
             if len(parts) != 2:
                 continue
             token = parts[1]
@@ -222,18 +224,31 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     # find a free tcp port
     port = get_free_port(9000, 9100)
 
-    # installing VSCODE:
-    try:
-        python_ext = StorageManager.get_local_copy(
-            'https://github.com/microsoft/vscode-python/releases/download/2020.10.332292344/ms-python-release.vsix',
-            extract_archive=False)
-        code_server_deb = StorageManager.get_local_copy(
-            'https://github.com/cdr/code-server/releases/download/v3.7.4/code-server_3.7.4_amd64.deb',
-            extract_archive=False)
-        os.system("dpkg -i {}".format(code_server_deb))
-    except Exception as ex:
-        print("Failed installing vscode server: {}".format(ex))
-        return
+    if os.geteuid() == 0:
+        # installing VSCODE:
+        try:
+            python_ext = StorageManager.get_local_copy(
+                'https://github.com/microsoft/vscode-python/releases/download/2020.10.332292344/ms-python-release.vsix',
+                extract_archive=False)
+            code_server_deb = StorageManager.get_local_copy(
+                'https://github.com/cdr/code-server/releases/download/v3.7.4/code-server_3.7.4_amd64.deb',
+                extract_archive=False)
+            os.system("dpkg -i {}".format(code_server_deb))
+        except Exception as ex:
+            print("Failed installing vscode server: {}".format(ex))
+            return
+        vscode_path = 'code-server'
+    else:
+        python_ext = None
+        # check if code-server exists
+        # noinspection PyBroadException
+        try:
+            vscode_path = subprocess.check_output('which code-server', shell=True).decode().strip()
+            assert vscode_path
+        except Exception:
+            print('Error: Cannot install code-server (not root) and could not find code-server executable, skipping.')
+            task.set_parameter(name='properties/vscode_port', value=str(-1))
+            return
 
     cwd = (
         os.path.expandvars(os.path.expanduser(param["user_base_directory"]))
@@ -255,17 +270,16 @@ def start_vscode_server(hostname, hostnames, param, task, env):
         fd, local_filename = mkstemp()
         subprocess.Popen(
             [
-                "code-server",
+                vscode_path,
                 "--auth",
                 "none",
                 "--bind-addr",
                 "127.0.0.1:{}".format(port),
                 "--user-data-dir", user_folder,
                 "--extensions-dir", exts_folder,
-                "--install-extension", python_ext,
                 "--install-extension", "ms-toolsai.jupyter",
                 # "--install-extension", "donjayamanne.python-extension-pack"
-            ],
+            ] + ["--install-extension", python_ext] if python_ext else [],
             env=env,
             stdout=fd,
             stderr=fd,
@@ -292,8 +306,8 @@ def start_vscode_server(hostname, hostnames, param, task, env):
             pass
         proc = subprocess.Popen(
             ['bash', '-c',
-             'code-server --auth none --bind-addr 127.0.0.1:{} --disable-update-check '
-             '--user-data-dir {} --extensions-dir {}'.format(port, user_folder, exts_folder)],
+             '{} --auth none --bind-addr 127.0.0.1:{} --disable-update-check '
+             '--user-data-dir {} --extensions-dir {}'.format(vscode_path, port, user_folder, exts_folder)],
             env=env,
             stdout=fd,
             stderr=fd,
@@ -313,6 +327,12 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
 
 def start_jupyter_server(hostname, hostnames, param, task, env):
+    if not param.get('jupyterlab', True):
+        print('no jupyterlab to monitor - going to sleep')
+        while True:
+            sleep(10.)
+        return
+
     # execute jupyter notebook
     fd, local_filename = mkstemp()
     cwd = (
@@ -323,6 +343,10 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
 
     # find a free tcp port
     port = get_free_port(8888, 9000)
+
+    # if we are not running as root, make sure the sys executable is in the PATH
+    env = dict(**env)
+    env['PATH'] = '{}:{}'.format(Path(sys.executable).parent.as_posix(), env.get('PATH', ''))
 
     # make sure we have the needed cwd
     # noinspection PyBroadException
@@ -342,7 +366,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
             "--no-browser",
             "--allow-root",
             "--ip",
-            "0.0.0.0",
+            "127.0.0.1",
             "--port",
             str(port),
         ],
@@ -365,34 +389,69 @@ def setup_ssh_server(hostname, hostnames, param, task):
         port = get_free_port(10022, 15000)
         proxy_port = get_free_port(10022, 15000)
 
-        # noinspection SpellCheckingInspection
-        os.system(
-            "export PYTHONPATH=\"\" && "
-            "apt-get install -y openssh-server && "
-            "mkdir -p /var/run/sshd && "
-            "echo 'root:{password}' | chpasswd && "
-            "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
-            "sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && "
-            "sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd "
-            "&& "  # noqa: W605
-            "echo 'ClientAliveInterval 10' >> /etc/ssh/sshd_config && "
-            "echo 'ClientAliveCountMax 20' >> /etc/ssh/sshd_config && "
-            "echo 'AcceptEnv TRAINS_API_ACCESS_KEY TRAINS_API_SECRET_KEY "
-            "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY' >> /etc/ssh/sshd_config && "
-            'echo "export VISIBLE=now" >> /etc/profile && '
-            'echo "export PATH=$PATH" >> /etc/profile && '
-            'echo "ldconfig" >> /etc/profile && '
-            'echo "export TRAINS_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
-                password=ssh_password,
-                port=port,
-                trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("TRAINS_CONFIG_FILE"),
+        # if we are root, install open-ssh
+        if os.geteuid() == 0:
+            # noinspection SpellCheckingInspection
+            os.system(
+                "export PYTHONPATH=\"\" && "
+                "apt-get install -y openssh-server && "
+                "mkdir -p /var/run/sshd && "
+                "echo 'root:{password}' | chpasswd && "
+                "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
+                "sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && "
+                "sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd "
+                "&& "  # noqa: W605
+                "echo 'ClientAliveInterval 10' >> /etc/ssh/sshd_config && "
+                "echo 'ClientAliveCountMax 20' >> /etc/ssh/sshd_config && "
+                "echo 'AcceptEnv TRAINS_API_ACCESS_KEY TRAINS_API_SECRET_KEY "
+                "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY' >> /etc/ssh/sshd_config && "
+                'echo "export VISIBLE=now" >> /etc/profile && '
+                'echo "export PATH=$PATH" >> /etc/profile && '
+                'echo "ldconfig" >> /etc/profile && '
+                'echo "export TRAINS_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
+                    password=ssh_password,
+                    port=port,
+                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("TRAINS_CONFIG_FILE"),
+                )
             )
-        )
+            sshd_path = '/usr/sbin/sshd'
+            ssh_config_path = '/etc/ssh/'
+            custom_ssh_conf = None
+        else:
+            # check if sshd exists
+            # noinspection PyBroadException
+            try:
+                sshd_path = subprocess.check_output('which sshd', shell=True).decode().strip()
+                ssh_config_path = os.path.join(os.getcwd(), '.clearml_session_sshd')
+                Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
+                custom_ssh_conf = os.path.join(ssh_config_path, 'sshd_config')
+                with open(custom_ssh_conf, 'wt') as f:
+                    conf = \
+                        "PermitRootLogin yes" + "\n"\
+                        "ClientAliveInterval 10" + "\n"\
+                        "ClientAliveCountMax 20" + "\n"\
+                        "AllowTcpForwarding yes" + "\n"\
+                        "UsePAM yes" + "\n"\
+                        "AuthorizedKeysFile {}".format(os.path.join(ssh_config_path, 'authorized_keys')) + "\n"\
+                        "PidFile {}".format(os.path.join(ssh_config_path, 'sshd.pid')) + "\n"\
+                        "AcceptEnv TRAINS_API_ACCESS_KEY TRAINS_API_SECRET_KEY "\
+                        "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY"+"\n"
+                    for k in default_ssh_fingerprint:
+                        filename = os.path.join(ssh_config_path, '{}'.format(k.replace('__pub', '.pub')))
+                        conf += "HostKey {}\n".format(filename)
+
+                    f.write(conf)
+            except Exception:
+                print('Error: Cannot install sshd (not root) and could not find sshd executable, leaving!')
+                return
+            # clear the ssh password, we cannot change it
+            ssh_password = None
+            task.set_parameter('{}/ssh_password'.format(config_section_name), '')
 
         # create fingerprint files
-        Path('/etc/ssh/').mkdir(parents=True, exist_ok=True)
+        Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
         for k, v in default_ssh_fingerprint.items():
-            filename = '/etc/ssh/{}'.format(k.replace('__pub', '.pub'))
+            filename = os.path.join(ssh_config_path, '{}'.format(k.replace('__pub', '.pub')))
             try:
                 os.unlink(filename)
             except Exception:  # noqa
@@ -400,34 +459,41 @@ def setup_ssh_server(hostname, hostnames, param, task):
             if v:
                 with open(filename, 'wt') as f:
                     f.write(v + (' root@{}'.format(hostname) if filename.endswith('.pub') else ''))
-                os.chmod(filename, 0o644 if filename.endswith('.pub') else 0o600)
+                os.chmod(filename, 0o600 if filename.endswith('.pub') else 0o600)
 
-        # run server
-        result = os.system("/usr/sbin/sshd -p {port}".format(port=port))
+        # run server in foreground so it gets killed with us
+        proc_args = [sshd_path, "-D", "-p", str(port)] + (["-f", custom_ssh_conf] if custom_ssh_conf else [])
+        proc = subprocess.Popen(args=proc_args)
+        # noinspection PyBroadException
+        try:
+            result = proc.wait(timeout=1)
+        except Exception:
+            result = 0
 
-        if result == 0:
-            # noinspection PyBroadException
-            try:
-                TcpProxy(listen_port=proxy_port, target_port=port, proxy_state={}, verbose=False,  # noqa
-                         keep_connection=True, is_connection_server=True)
-            except Exception as ex:
-                print('Warning: Could not setup stable ssh port, {}'.format(ex))
-                proxy_port = None
+        if result != 0:
+            raise ValueError("Failed launching sshd: ", proc_args)
 
-            if task:
-                if proxy_port:
-                    task.set_parameter(name='properties/internal_stable_ssh_port', value=str(proxy_port))
-                task.set_parameter(name='properties/internal_ssh_port', value=str(port))
+        # noinspection PyBroadException
+        try:
+            TcpProxy(listen_port=proxy_port, target_port=port, proxy_state={}, verbose=False,  # noqa
+                     keep_connection=True, is_connection_server=True)
+        except Exception as ex:
+            print('Warning: Could not setup stable ssh port, {}'.format(ex))
+            proxy_port = None
 
-            print(
-                "\n#\n# SSH Server running on {} [{}] port {}\n# LOGIN u:root p:{}\n#\n".format(
-                    hostname, hostnames, port, ssh_password
-                )
+        if task:
+            if proxy_port:
+                task.set_parameter(name='properties/internal_stable_ssh_port', value=str(proxy_port))
+            task.set_parameter(name='properties/internal_ssh_port', value=str(port))
+
+        print(
+            "\n#\n# SSH Server running on {} [{}] port {}\n# LOGIN u:root p:{}\n#\n".format(
+                hostname, hostnames, port, ssh_password
             )
-        else:
-            raise ValueError()
+        )
+
     except Exception as ex:
-        print("{}\n\n#\n# Error: SSH server could not be launched\n#\n".format(ex))
+        print("Error: {}\n\n#\n# Error: SSH server could not be launched\n#\n".format(ex))
 
 
 def setup_user_env(param, task):
@@ -593,6 +659,7 @@ def main():
         "user_key": None,
         "user_secret": None,
         "vscode_server": True,
+        "jupyterlab": True,
         "public_ip": False,
     }
     task = init_task(param, default_ssh_fingerprint)
