@@ -498,6 +498,13 @@ def setup_ssh_server(hostname, hostnames, param, task):
 
 def setup_user_env(param, task):
     env = setup_os_env(param)
+    # do not change user bash/profile
+    if os.geteuid() != 0:
+        if param.get("user_key") and param.get("user_secret"):
+            env['TRAINS_API_ACCESS_KEY'] = param.get("user_key")
+            env['TRAINS_API_SECRET_KEY'] = param.get("user_secret")
+        return env
+
     # create symbolic link to the venv
     environment = os.path.expanduser('~/environment')
     # noinspection PyBroadException
