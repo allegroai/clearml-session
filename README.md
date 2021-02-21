@@ -219,6 +219,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--debugging DEBUGGING] [--queue QUEUE]
                        [--docker DOCKER] [--public-ip [true/false]]
                        [--vscode-server [true/false]]
+                       [--jupyter-lab [true/false]]
                        [--git-credentials [true/false]]
                        [--user-folder USER_FOLDER]
                        [--packages [PACKAGES [PACKAGES ...]]]
@@ -231,6 +232,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network] [--password PASSWORD]
+                       [--username USERNAME]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -254,8 +256,11 @@ optional arguments:
                         Set if running on the cloud. Default: false (use for
                         local / on-premises)
   --vscode-server [true/false]
-                        Installing vscode server (code-server) on interactive
+                        Install vscode server (code-server) on interactive
                         session (default: true)
+  --jupyter-lab [true/false]
+                        Install Jupyter-Lab on interactive session (default:
+                        true)
   --git-credentials [true/false]
                         If true, local .git-credentials file is sent to the
                         interactive session. (default: false)
@@ -277,10 +282,10 @@ optional arguments:
                         sessions. To clear the init-script do not pass a file
   --config-file CONFIG_FILE
                         Advanced: Change the configuration file used to store
-                        the previous state (default: ~/.clearml_session.json
+                        the previous state (default: ~/.clearml_session.json)
   --remote-gateway [REMOTE_GATEWAY]
                         Advanced: Specify gateway ip/address to be passed to
-                        interactive session (for use with k8s ingestion / ELB
+                        interactive session (for use with k8s ingestion / ELB)
   --base-task-id BASE_TASK_ID
                         Advanced: Set the base task ID for the interactive
                         session. (default: previously used Task). Use `none`
@@ -301,8 +306,10 @@ optional arguments:
                         to docker (assumes k8s network ingestion) (default:
                         false)
   --password PASSWORD   Advanced: Select ssh password for the interactive
-                        session (default: previously used one)
+                        session (default: `randomly-generated` or previously
+                        used one)
+  --username USERNAME   Advanced: Select ssh username for the interactive
+                        session (default: `root` or previously used one)
 
 Notice! all arguments are stored as new defaults for the next session
-
 ```

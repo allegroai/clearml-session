@@ -759,10 +759,10 @@ def setup_parser(parser):
                              'To clear the init-script do not pass a file')
     parser.add_argument('--config-file', type=str, default='~/.clearml_session.json',
                         help='Advanced: Change the configuration file used to store the previous state '
-                             '(default: ~/.clearml_session.json')
+                             '(default: ~/.clearml_session.json)')
     parser.add_argument('--remote-gateway', default=None, nargs='?',
                         help='Advanced: Specify gateway ip/address to be passed to interactive session '
-                             '(for use with k8s ingestion / ELB')
+                             '(for use with k8s ingestion / ELB)')
     parser.add_argument('--base-task-id', type=str, default=None,
                         help='Advanced: Set the base task ID for the interactive session. '
                              '(default: previously used Task). Use `none` for the default interactive session')
