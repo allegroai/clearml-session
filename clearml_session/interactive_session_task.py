@@ -516,15 +516,15 @@ def setup_user_env(param, task):
     # set default user credentials
     if param.get("user_key") and param.get("user_secret"):
         os.system("echo 'export TRAINS_API_ACCESS_KEY=\"{}\"' >> ~/.bashrc".format(
-            param.get("user_key", "").replace('\\$', '\\$')))
+            param.get("user_key", "").replace('$', '\\$')))
         os.system("echo 'export TRAINS_API_SECRET_KEY=\"{}\"' >> ~/.bashrc".format(
-            param.get("user_secret", "").replace('\\$', '\\$')))
+            param.get("user_secret", "").replace('$', '\\$')))
         os.system("echo 'export TRAINS_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
             param.get("default_docker", "").strip() or env.get('TRAINS_DOCKER_IMAGE', '')))
         os.system("echo 'export TRAINS_API_ACCESS_KEY=\"{}\"' >> ~/.profile".format(
-            param.get("user_key", "").replace('\\$', '\\$')))
+            param.get("user_key", "").replace('$', '\\$')))
         os.system("echo 'export TRAINS_API_SECRET_KEY=\"{}\"' >> ~/.profile".format(
-            param.get("user_secret", "").replace('\\$', '\\$')))
+            param.get("user_secret", "").replace('$', '\\$')))
         os.system("echo 'export TRAINS_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
             param.get("default_docker", "").strip() or env.get('TRAINS_DOCKER_IMAGE', '')))
         env['TRAINS_API_ACCESS_KEY'] = param.get("user_key")
