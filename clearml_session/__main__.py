@@ -6,7 +6,7 @@ import subprocess
 import sys
 from argparse import ArgumentParser, FileType
 from functools import reduce
-from io import TextIOBase
+from io import TextIOBase, StringIO
 from time import time, sleep
 
 if sys.platform == 'win32':
@@ -343,7 +343,7 @@ def get_user_inputs(args, parser, state, client):
         queues_list = '\n'.join('{}] {}'.format(i, q) for i, q in enumerate(queues))
         while True:
             try:
-                choice = int(input(queues_list+'\nSelect a queue [0-{}] '.format(len(queues)-1)))
+                choice = int(input(queues_list+'\nSelect a queue [0-{}]: '.format(len(queues)-1)))
                 assert 0 <= choice < len(queues)
                 break
             except (TypeError, ValueError, AssertionError):
@@ -364,7 +364,7 @@ def get_user_inputs(args, parser, state, client):
 def save_state(state, state_file):
     # if we are running in debugging mode,
     # only store the current task (do not change the defaults)
-    if state.get('debugging'):
+    if state.get('debugging_session'):
         # noinspection PyBroadException
         base_state = load_state(state_file)
         base_state['task_id'] = state.get('task_id')
@@ -383,14 +383,16 @@ def load_state(state_file):
             state = json.load(f)
     except Exception:
         state = {}
+    # never reload --debug state
+    state.pop('debug', None)
     return state
 
 
 def clone_task(state, project_id):
     new_task = False
-    if state.get('debugging'):
-        print('Starting new debugging session to {}'.format(state.get('debugging')))
-        task = create_debugging_task(state, state.get('debugging'))
+    if state.get('debugging_session'):
+        print('Starting new debugging session to {}'.format(state.get('debugging_session')))
+        task = create_debugging_task(state, state.get('debugging_session'))
     elif state.get('base_task_id'):
         print('Cloning base session {}'.format(state['base_task_id']))
         task = Task.clone(source_task=state['base_task_id'], project=project_id, parent=state['base_task_id'])
@@ -409,7 +411,10 @@ def clone_task(state, project_id):
     task_params['properties/jupyter_token'] = ''
     task_params['properties/jupyter_port'] = ''
     if state.get('remote_gateway') is not None:
-        task_params['properties/external_address'] = str(state.get('remote_gateway'))
+        remote_gateway_parts = str(state.get('remote_gateway')).split(':')
+        task_params['properties/external_address'] = remote_gateway_parts[0]
+        if len(remote_gateway_parts) > 1:
+            task_params['properties/external_ssh_port'] = remote_gateway_parts[1]
     task_params['{}/ssh_server'.format(section)] = str(True)
     task_params['{}/ssh_password'.format(section)] = state['password']
     task_params['{}/user_key'.format(section)] = config_obj.get("api.credentials.access_key")
@@ -424,6 +429,8 @@ def clone_task(state, project_id):
         docker = default_docker_image
     if docker:
         task_params['{}/default_docker'.format(section)] = docker.replace('--network host', '').strip()
+        if state.get('docker_args'):
+            docker += ' {}'.format(state.get('docker_args'))
         task.set_base_docker(docker + (
             ' --network host' if not state.get('skip_docker_network') and '--network host' not in docker else ''))
     # set the bash init script
@@ -477,6 +484,7 @@ def wait_for_machine(state, task):
             last_status = task._get_status()[1]
             print('Status [{}]{}'.format(status, ' - {}'.format(last_status) if last_status else ''))
         last_status = status
+
     print('Remote machine allocated')
     print('Setting remote environment [Task id={}]'.format(task.id))
     print('Setup process details: {}'.format(task.get_output_log_web_page()))
@@ -500,8 +508,25 @@ def wait_for_machine(state, task):
     if state.get('vscode_server'):
         wait_properties += ['properties/vscode_port']
 
+    last_lines = []
+    period_counter = 0
     while any(bool(not task.get_parameter(p)) for p in wait_properties) and task.get_status() == 'in_progress':
-        print('.', end='', flush=True)
+        lines = task.get_reported_console_output(10) if state.get('debug') else []
+        if last_lines != lines:
+            # new line if we had '.' counter in the previous run
+            if period_counter:
+                print('')
+                period_counter = 0
+            try:
+                index = next(i for i, line in enumerate(lines) if last_lines and line == last_lines[-1])
+                print('> ' + ''.join(lines[index+1:]).rstrip().replace('\n', '\n> '))
+            except StopIteration:
+                print('> ' + ''.join(lines).rstrip().replace('\n', '\n> '))
+            last_lines = lines
+        else:
+            print('.', end='', flush=True)
+            period_counter += 1
+
         sleep(3.)
         task.reload()
     if task.get_status() != 'in_progress':
@@ -512,7 +537,7 @@ def wait_for_machine(state, task):
     return task
 
 
-def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_remote_pair_list):
+def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_remote_pair_list, debug=False):
     print('Starting SSH tunnel')
     child = None
     args = ['-N', '-C',
@@ -525,22 +550,26 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
     for local, remote in local_remote_pair_list:
         args.extend(['-L', '{}:localhost:{}'.format(local, remote)])
 
+    # store SSH output
+    fd = StringIO() if debug else sys.stdout
+
     # noinspection PyBroadException
     try:
         child = pexpect.spawn(
             command=_check_ssh_executable(),
             args=args,
-            logfile=sys.stdout, timeout=20, encoding='utf-8')
+            logfile=fd, timeout=20, encoding='utf-8')
+
         i = child.expect([r'(?i)password:', r'\(yes\/no\)', r'.*[$#] ', pexpect.EOF])
         if i == 0:
             child.sendline(ssh_password)
             try:
                 child.expect([r'(?i)password:'], timeout=5)
-                print('Error: incorrect password')
+                print('{}Error: incorrect password'.format(fd.read() + '\n' if debug else ''))
                 ssh_password = input('Please enter password manually: ')
                 child.sendline(ssh_password)
                 child.expect([r'(?i)password:'], timeout=5)
-                print('Error: incorrect user input password')
+                print('{}Error: incorrect user input password'.format(fd.read() + '\n' if debug else ''))
                 raise ValueError('Incorrect password')
             except pexpect.TIMEOUT:
                 pass
@@ -556,7 +585,7 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
                     ssh_password = input('Please enter password manually: ')
                     child.sendline(ssh_password)
                     child.expect([r'(?i)password:'], timeout=5)
-                    print('Error: incorrect user input password')
+                    print('{}Error: incorrect user input password'.format(fd.read() + '\n' if debug else ''))
                     raise ValueError('Incorrect password')
                 except pexpect.TIMEOUT:
                     pass
@@ -638,7 +667,9 @@ def monitor_ssh_tunnel(state, task):
                 ssh_process, ssh_password = start_ssh_tunnel(
                     state.get('username') or 'root',
                     remote_address, ssh_port, ssh_password,
-                    local_remote_pair_list=local_remote_pair_list)
+                    local_remote_pair_list=local_remote_pair_list,
+                    debug=state.get('debug', False),
+                )
 
                 if ssh_process and ssh_process.isalive():
                     msg = \
@@ -721,14 +752,17 @@ def setup_parser(parser):
                         help='Display the clearml-session utility version')
     parser.add_argument('--attach', default=False, nargs='?',
                         help='Attach to running interactive session (default: previous session)')
-    parser.add_argument('--debugging', type=str, default=None,
+    parser.add_argument('--debugging-session', type=str, default=None,
                         help='Pass existing Task id (experiment), create a copy of the experiment on a remote machine, '
-                             'and launch jupyter/ssh for interactive access. Example --debugging <task_id>')
+                             'and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>')
     parser.add_argument('--queue', type=str, default=None,
                         help='Select the queue to launch the interactive session on (default: previously used queue)')
     parser.add_argument('--docker', type=str, default=None,
                         help='Select the docker image to use in the interactive session on '
                              '(default: previously used docker image or `{}`)'.format(default_docker_image))
+    parser.add_argument('--docker-args', type=str, default=None,
+                        help='Add additional arguments for the docker image to use in the interactive session on '
+                             '(default: previously used docker-args)')
     parser.add_argument('--public-ip', default=None, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='If True register the public IP of the remote machine. Set if running on the cloud. '
@@ -761,7 +795,7 @@ def setup_parser(parser):
                         help='Advanced: Change the configuration file used to store the previous state '
                              '(default: ~/.clearml_session.json)')
     parser.add_argument('--remote-gateway', default=None, nargs='?',
-                        help='Advanced: Specify gateway ip/address to be passed to interactive session '
+                        help='Advanced: Specify gateway ip/address:port to be passed to interactive session '
                              '(for use with k8s ingestion / ELB)')
     parser.add_argument('--base-task-id', type=str, default=None,
                         help='Advanced: Set the base task ID for the interactive session. '
@@ -784,6 +818,8 @@ def setup_parser(parser):
     parser.add_argument('--username', type=str, default=None,
                         help='Advanced: Select ssh username for the interactive session '
                              '(default: `root` or previously used one)')
+    parser.add_argument('--debug', action='store_true', default=None,
+                        help='Advanced: If set, print debugging information')
 
 
 def get_version():
@@ -817,6 +853,9 @@ def cli():
     # load previous state
     state_file = os.path.abspath(os.path.expandvars(os.path.expanduser(args.config_file)))
     state = load_state(state_file)
+
+    if args.debug:
+        state['debug'] = args.debug
 
     client = APIClient()
 
@@ -882,7 +921,7 @@ def _check_previous_session(client, args, state):
             task = None
         status = task.get_status() if task else None
         if status == 'in_progress':
-            if not args.debugging or task.parent == args.debugging:
+            if not args.debugging_session or task.parent == args.debugging_session:
                 # only ask if we were not requested directly
                 print('Using active session id={}'.format(task_id))
                 return task
@@ -894,10 +933,10 @@ def _check_previous_session(client, args, state):
     if not running_task_ids_created:
         return None
 
-    if args.debugging:
-        running_task_ids_created = [t for t in running_task_ids_created if t[2] == args.debugging]
+    if args.debugging_session:
+        running_task_ids_created = [t for t in running_task_ids_created if t[2] == args.debugging_session]
         if not running_task_ids_created:
-            print('No active task={} debugging session found'.format(args.debugging))
+            print('No active task={} debugging session found'.format(args.debugging_session))
             return None
 
     # a single running session
@@ -920,8 +959,8 @@ def _check_previous_session(client, args, state):
         for i, (tid, dt, _) in enumerate(running_task_ids_created))
     while True:
         try:
-            choice = input(session_list+'\nConnect to session [0-{}] or \'N\' to skip'.format(
-                len(running_task_ids_created)-1))
+            choice = input(session_list+'\nConnect to session [{}] or \'N\' to skip: '.format(
+                '0' if len(running_task_ids_created) <= 1 else '0-{}'.format(len(running_task_ids_created)-1)))
             if choice.strip().lower().startswith('n'):
                 choice = None
             elif default_i is not None and not choice.strip():
