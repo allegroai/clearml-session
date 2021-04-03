@@ -217,6 +217,16 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     if not param.get("vscode_server"):
         return
 
+    # get vscode version and python extension version
+    # they are extremely flaky, this combination works, most do not.
+    vscode_version = '3.9.2'
+    python_ext_version = '2021.3.658691958'
+    if param.get("vscode_version"):
+        vscode_version_parts = param.get("vscode_version").split(':')
+        vscode_version = vscode_version_parts[0]
+        if len(vscode_version_parts) > 1:
+            python_ext_version = vscode_version_parts[1]
+
     # make a copy of env and remove the pythonpath from it.
     env = dict(**env)
     env.pop('PYTHONPATH', None)
@@ -228,10 +238,12 @@ def start_vscode_server(hostname, hostnames, param, task, env):
         # installing VSCODE:
         try:
             python_ext = StorageManager.get_local_copy(
-                'https://github.com/microsoft/vscode-python/releases/download/2020.10.332292344/ms-python-release.vsix',
+                'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'.format(
+                    python_ext_version),
                 extract_archive=False)
             code_server_deb = StorageManager.get_local_copy(
-                'https://github.com/cdr/code-server/releases/download/v3.7.4/code-server_3.7.4_amd64.deb',
+                'https://github.com/cdr/code-server/releases/download/'
+                'v{version}/code-server_{version}_amd64.deb'.format(version=vscode_version),
                 extract_archive=False)
             os.system("dpkg -i {}".format(code_server_deb))
         except Exception as ex:
@@ -386,8 +398,11 @@ def setup_ssh_server(hostname, hostnames, param, task):
     ssh_password = param.get("ssh_password", "training")
     # noinspection PyBroadException
     try:
-        port = get_free_port(10022, 15000)
-        proxy_port = get_free_port(10022, 15000)
+        ssh_port = param.get("ssh_ports") or "10022:15000"
+        min_port = int(ssh_port.split(":")[0])
+        max_port = max(min_port+32, int(ssh_port.split(":")[-1]))
+        port = get_free_port(min_port, max_port)
+        proxy_port = get_free_port(min_port, max_port)
 
         # if we are root, install open-ssh
         if os.geteuid() == 0:
@@ -666,8 +681,10 @@ def main():
         "user_key": None,
         "user_secret": None,
         "vscode_server": True,
+        "vscode_version": '',
         "jupyterlab": True,
         "public_ip": False,
+        "ssh_ports": None,
     }
     task = init_task(param, default_ssh_fingerprint)
 

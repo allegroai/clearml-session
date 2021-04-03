@@ -422,6 +422,8 @@ def clone_task(state, project_id):
     task_params["{}/jupyterlab".format(section)] = bool(state.get('jupyter_lab'))
     task_params["{}/vscode_server".format(section)] = bool(state.get('vscode_server'))
     task_params["{}/public_ip".format(section)] = bool(state.get('public_ip'))
+    task_params["{}/ssh_ports".format(section)] = state.get('remote_ssh_port') or ''
+    task_params["{}/vscode_version".format(section)] = state.get('vscode_version') or ''
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
     docker = state.get('docker') or task.data.execution.docker_cmd
@@ -543,6 +545,7 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
     args = ['-N', '-C',
             '{}@{}'.format(username, remote_address), '-p', '{}'.format(ssh_port),
             '-o', 'UserKnownHostsFile=/dev/null',
+            '-o', 'Compression=yes',
             '-o', 'StrictHostKeyChecking=no',
             '-o', 'ServerAliveInterval=10',
             '-o', 'ServerAliveCountMax=10', ]
@@ -767,9 +770,14 @@ def setup_parser(parser):
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='If True register the public IP of the remote machine. Set if running on the cloud. '
                              'Default: false (use for local / on-premises)')
+    parser.add_argument('--remote-ssh-port', type=str, default=None,
+                        help='Set the remote ssh server port, running on the agent`s machine. (default: 10022)')
     parser.add_argument('--vscode-server', default=True, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Install vscode server (code-server) on interactive session (default: true)')
+    parser.add_argument('--vscode-version', type=str, default=None,
+                        help='Set vscode server (code-server) version, as well as vscode python extension version '
+                             '<vscode:python-ext> (example: "3.7.4:2020.10.332292344")')
     parser.add_argument('--jupyter-lab', default=True, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Install Jupyter-Lab on interactive session (default: true)')
