@@ -426,7 +426,7 @@ def clone_task(state, project_id):
     task_params["{}/vscode_version".format(section)] = state.get('vscode_version') or ''
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
-    docker = state.get('docker') or task.data.execution.docker_cmd
+    docker = state.get('docker') or task.get_base_docker()
     if not state.get('skip_docker_network') and not docker:
         docker = default_docker_image
     if docker:

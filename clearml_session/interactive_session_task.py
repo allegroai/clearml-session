@@ -409,7 +409,7 @@ def setup_ssh_server(hostname, hostnames, param, task):
             # noinspection SpellCheckingInspection
             os.system(
                 "export PYTHONPATH=\"\" && "
-                "apt-get install -y openssh-server && "
+                "([ ! -z $(which sshd) ] || (apt-get update && apt-get install -y openssh-server)) && "
                 "mkdir -p /var/run/sshd && "
                 "echo 'root:{password}' | chpasswd && "
                 "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
@@ -670,6 +670,7 @@ def run_user_init_script(task):
                 os.unlink(os_json_filename)
             except:  # noqa
                 pass
+    os.environ['CLEARML_DOCKER_BASH_SCRIPT'] = str(init_script)
 
 
 def main():
