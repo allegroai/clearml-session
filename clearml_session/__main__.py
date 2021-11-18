@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import logging
@@ -20,6 +21,7 @@ import psutil
 from clearml import Task
 from clearml.backend_api.session.client import APIClient
 from clearml.config import config_obj
+from clearml.backend_api import Session
 from .tcp_proxy import TcpProxy
 from .single_thread_proxy import SingleThreadProxy
 
@@ -136,35 +138,59 @@ def create_base_task(state, project_name=None, task_name=None):
     task = Task.create(project_name=project_name or 'DevOps',
                        task_name=task_name or 'Interactive Session',
                        task_type=Task.TaskTypes.application)
-    task_state = task.export_task()
+    task_script = task.data.script.to_dict()
     base_script_file = os.path.abspath(os.path.join(__file__, '..', 'tcp_proxy.py'))
     with open(base_script_file, 'rt') as f:
-        task_state['script']['diff'] = f.read()
+        task_script['diff'] = f.read()
     base_script_file = os.path.abspath(os.path.join(__file__, '..', 'interactive_session_task.py'))
     with open(base_script_file, 'rt') as f:
-        task_state['script']['diff'] += '\n\n' + f.read()
+        task_script['diff'] += '\n\n' + f.read()
 
-    task_state['script']['working_dir'] = '.'
-    task_state['script']['entry_point'] = 'interactive_session.py'
-    task_state['script']['requirements'] = {'pip': '\n'.join(
+    task_script['working_dir'] = '.'
+    task_script['entry_point'] = 'interactive_session.py'
+    task_script['requirements'] = {'pip': '\n'.join(
         ["clearml"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
-    task.update_task(task_state)
+
     section, _, _ = _get_config_section_name()
-    task.set_parameters({
-        "{}/user_base_directory".format(section): "~/",
-        "{}/ssh_server".format(section): True,
-        "{}/ssh_password".format(section): "training",
-        "{}/default_docker".format(section): "nvidia/cuda",
-        "{}/user_key".format(section): '',
-        "{}/user_secret".format(section): '',
-        "properties/external_address": '',
-        "properties/internal_ssh_port": '',
-        "properties/jupyter_token": '',
-        "properties/jupyter_port": '',
-    })
+
+    if Session.check_min_api_version('2.13'):
+        _runtime_prop = dict(task._get_runtime_properties())
+        _runtime_prop.update({
+            "_user_key": '',
+            "_user_secret": '',
+            "_jupyter_token": '',
+            "_ssh_password": "training",
+        })
+        # noinspection PyProtectedMember
+        task._set_runtime_properties(_runtime_prop)
+        task.set_parameters({
+            "{}/user_base_directory".format(section): "~/",
+            "{}/ssh_server".format(section): True,
+            "{}/default_docker".format(section): "nvidia/cuda",
+            "properties/external_address": '',
+            "properties/internal_ssh_port": '',
+            "properties/jupyter_port": '',
+        })
+    else:
+        task.set_parameters({
+            "{}/user_base_directory".format(section): "~/",
+            "{}/ssh_server".format(section): True,
+            "{}/ssh_password".format(section): "training",
+            "{}/default_docker".format(section): "nvidia/cuda",
+            "{}/user_key".format(section): '',
+            "{}/user_secret".format(section): '',
+            "properties/external_address": '',
+            "properties/internal_ssh_port": '',
+            "properties/jupyter_token": '',
+            "properties/jupyter_port": '',
+        })
+
     task.set_system_tags([system_tag])
-    task.reset(force=True)
+
+    # only update the data at the end, so reload requests are smaller
+    # noinspection PyProtectedMember
+    task._edit(script=task_script)
     return task
 
 
@@ -197,18 +223,38 @@ def create_debugging_task(state, debug_task_id):
         (['pylint'] if state.get('vscode_server') else [])
     task.update_task(task_state)
     section, _, _ = _get_config_section_name()
-    task.set_parameters({
-        "{}/user_base_directory".format(section): "~/",
-        "{}/ssh_server".format(section): True,
-        "{}/ssh_password".format(section): "training",
-        "{}/default_docker".format(section): "nvidia/cuda",
-        "{}/user_key".format(section): '',
-        "{}/user_secret".format(section): '',
-        "properties/external_address": '',
-        "properties/internal_ssh_port": '',
-        "properties/jupyter_token": '',
-        "properties/jupyter_port": '',
-    })
+
+    if Session.check_min_api_version('2.13'):
+        _runtime_prop = dict(task._get_runtime_properties())
+        _runtime_prop.update({
+            "_user_key": '',
+            "_user_secret": '',
+            "_jupyter_token": '',
+            "_ssh_password": "training",
+        })
+        # noinspection PyProtectedMember
+        task._set_runtime_properties(_runtime_prop)
+        task.set_parameters({
+            "{}/user_base_directory".format(section): "~/",
+            "{}/ssh_server".format(section): True,
+            "{}/default_docker".format(section): "nvidia/cuda",
+            "properties/external_address": '',
+            "properties/internal_ssh_port": '',
+            "properties/jupyter_port": '',
+        })
+    else:
+        task.set_parameters({
+            "{}/user_base_directory".format(section): "~/",
+            "{}/ssh_server".format(section): True,
+            "{}/ssh_password".format(section): "training",
+            "{}/default_docker".format(section): "nvidia/cuda",
+            "{}/user_key".format(section): '',
+            "{}/user_secret".format(section): '',
+            "properties/external_address": '',
+            "properties/internal_ssh_port": '',
+            "properties/jupyter_token": '',
+            "properties/jupyter_port": '',
+        })
     task.set_system_tags([system_tag])
     task.reset(force=True)
     return task
@@ -263,6 +309,17 @@ def _get_user_id(client):
     assert res.ok
     current_user_id = res.json()['data']['user']['id']
     return current_user_id
+
+
+def _b64_encode_file(file):
+    # noinspection PyBroadException
+    try:
+        import gzip
+        with open(file, 'rt') as f:
+            git_credentials = gzip.compress(f.read().encode('utf8'))
+        return base64.encodebytes(git_credentials).decode('ascii')
+    except Exception:
+        return None
 
 
 def get_project_id(state):
@@ -383,8 +440,8 @@ def load_state(state_file):
             state = json.load(f)
     except Exception:
         state = {}
-    # never reload --debug state
-    state.pop('debug', None)
+    # never reload --verbose state
+    state.pop('verbose', None)
     return state
 
 
@@ -402,13 +459,31 @@ def clone_task(state, project_id):
         task = create_base_task(state, project_name=state.get('project'))
         new_task = True
 
+    print('Configuring new session')
+    runtime_prop_support = Session.check_min_api_version("2.13")
+    if runtime_prop_support:
+        # noinspection PyProtectedMember
+        runtime_properties = dict(task._get_runtime_properties() or {})
+        runtime_properties['_jupyter_token'] = ''
+        runtime_properties['_ssh_password'] = str(state['password'])
+        runtime_properties['_user_key'] = str(config_obj.get("api.credentials.access_key"))
+        runtime_properties['_user_secret'] = (config_obj.get("api.credentials.secret_key"))
+        # noinspection PyProtectedMember
+        task._set_runtime_properties(runtime_properties)
+
     task_params = task.get_parameters(backwards_compatibility=False)
     if 'General/ssh_server' in task_params:
         section = 'General'
         init_section = 'init_script'
     else:
         section, _, init_section = _get_config_section_name()
-    task_params['properties/jupyter_token'] = ''
+
+    if not runtime_prop_support:
+        task_params['properties/jupyter_token'] = ''
+        task_params['{}/ssh_password'.format(section)] = state['password']
+        task_params['{}/user_key'.format(section)] = config_obj.get("api.credentials.access_key")
+        task_params['{}/user_secret'.format(section)] = config_obj.get("api.credentials.secret_key")
+
     task_params['properties/jupyter_port'] = ''
     if state.get('remote_gateway') is not None:
         remote_gateway_parts = str(state.get('remote_gateway')).split(':')
@@ -416,9 +491,6 @@ def clone_task(state, project_id):
         if len(remote_gateway_parts) > 1:
             task_params['properties/external_ssh_port'] = remote_gateway_parts[1]
     task_params['{}/ssh_server'.format(section)] = str(True)
-    task_params['{}/ssh_password'.format(section)] = state['password']
-    task_params['{}/user_key'.format(section)] = config_obj.get("api.credentials.access_key")
-    task_params['{}/user_secret'.format(section)] = config_obj.get("api.credentials.secret_key")
     task_params["{}/jupyterlab".format(section)] = bool(state.get('jupyter_lab'))
     task_params["{}/vscode_server".format(section)] = bool(state.get('vscode_server'))
     task_params["{}/public_ip".format(section)] = bool(state.get('public_ip'))
@@ -443,13 +515,30 @@ def clone_task(state, project_id):
     # store the .git-credentials
     if state.get('git_credentials'):
         git_cred_file = os.path.join(os.path.expanduser('~'), '.git-credentials')
-        if os.path.isfile(git_cred_file):
-            task.connect_configuration(
-                configuration=git_cred_file, name='git_credentials', description='git credentials')
         git_conf_file = os.path.join(os.path.expanduser('~'), '.gitconfig')
-        if os.path.isfile(git_conf_file):
-            task.connect_configuration(
-                configuration=git_conf_file, name='git_config', description='git config')
+        if not os.path.isfile(git_cred_file):
+            git_cred_file = None
+        if not os.path.isfile(git_conf_file):
+            git_conf_file = None
+
+        if runtime_prop_support:
+            # noinspection PyProtectedMember
+            runtime_properties = dict(task._get_runtime_properties() or {})
+            if git_cred_file:
+                runtime_properties['_git_credentials'] = _b64_encode_file(git_cred_file)
+            if git_conf_file:
+                runtime_properties['_git_config'] = _b64_encode_file(git_conf_file)
+            # store back
+            if git_cred_file or git_conf_file:
+                # noinspection PyProtectedMember
+                task._set_runtime_properties(runtime_properties)
+        else:
+            if git_cred_file:
+                task.connect_configuration(
+                    configuration=git_cred_file, name='git_credentials', description='git credentials')
+            if git_conf_file:
+                task.connect_configuration(
+                    configuration=git_conf_file, name='git_config', description='git config')
 
     if state.get('packages'):
         requirements = task.data.script.requirements or {}
@@ -476,21 +565,28 @@ def wait_for_machine(state, task):
     # wait until task is running
     print('Waiting for remote machine allocation [id={}]'.format(task.id))
     last_status = None
-    while last_status != 'in_progress' and last_status in (None, 'created', 'queued', 'unknown',):
+    last_message = None
+    stopped_counter = 0
+    while last_status != 'in_progress' and last_status in (None, 'created', 'queued', 'unknown', 'stopped'):
         print('.', end='', flush=True)
         if last_status is not None:
             sleep(2.)
-        status = task.get_status()
-        if last_status != status:
+            stopped_counter = (stopped_counter+1) if last_status == 'stopped' else 0
+            if stopped_counter > 5:
+                break
+        # noinspection PyProtectedMember
+        status, message = task._get_status()
+        status = str(status)
+        if last_status != status or last_message != message:
             # noinspection PyProtectedMember
-            last_status = task._get_status()[1]
-            print('Status [{}]{}'.format(status, ' - {}'.format(last_status) if last_status else ''))
+            print('Status [{}]{} {}'.format(status, ' - {}'.format(last_status) if last_status else '', message))
         last_status = status
+        last_message = message
 
     print('Remote machine allocated')
     print('Setting remote environment [Task id={}]'.format(task.id))
     print('Setup process details: {}'.format(task.get_output_log_web_page()))
-    print('Waiting for environment setup to complete [usually about 20-30 seconds]')
+    print('Waiting for environment setup to complete [usually about 20-30 seconds, see last log line/s below]')
     # monitor progress, until we get the new jupyter, then we know it is working
     task.reload()
 
@@ -513,24 +609,38 @@ def wait_for_machine(state, task):
     last_lines = []
     period_counter = 0
     while any(bool(not task.get_parameter(p)) for p in wait_properties) and task.get_status() == 'in_progress':
-        lines = task.get_reported_console_output(10) if state.get('debug') else []
+        lines = task.get_reported_console_output(10 if state.get('verbose') else 1)
         if last_lines != lines:
             # new line if we had '.' counter in the previous run
             if period_counter:
-                print('')
+                if state.get('verbose'):
+                    print('')
                 period_counter = 0
             try:
                 index = next(i for i, line in enumerate(lines) if last_lines and line == last_lines[-1])
-                print('> ' + ''.join(lines[index+1:]).rstrip().replace('\n', '\n> '))
+                print_line = '> ' + ''.join(lines[index+1:]).rstrip().replace('\n', '\n> ')
             except StopIteration:
-                print('> ' + ''.join(lines).rstrip().replace('\n', '\n> '))
+                print_line = '> ' + ''.join(lines).rstrip().replace('\n', '\n> ')
+
+            if state.get('verbose'):
+                print(print_line)
+            else:
+                print_line = [l for l in print_line.split('\n') if l.rstrip()]
+                if print_line:
+                    print('\r' + print_line[-1], end='', flush=True)
             last_lines = lines
         else:
-            print('.', end='', flush=True)
             period_counter += 1
+            print(('' if state.get('verbose') else '\r') + '.'*period_counter, end='', flush=True)
 
         sleep(3.)
         task.reload()
+
+    # clear the line
+    if not state.get('verbose'):
+        print('\r     ', end='', flush=True)
+        print('\n')
+        
     if task.get_status() != 'in_progress':
         raise ValueError("Remote setup failed (status={}) see details: {}".format(
             task.get_status(), task.get_output_log_web_page()))
@@ -628,14 +738,21 @@ def monitor_ssh_tunnel(state, task):
             if not all([ssh_port, jupyter_token, jupyter_port, internal_ssh_port, ssh_password, remote_address]):
                 task.reload()
                 task_parameters = task.get_parameters()
-                section = 'General' if 'General/ssh_server' in task_parameters else default_section
+                if Session.check_min_api_version("2.13"):
+                    # noinspection PyProtectedMember
+                    runtime_prop = task._get_runtime_properties()
+                    ssh_password = runtime_prop.get('_ssh_password') or state.get('password', '')
+                    jupyter_token = runtime_prop.get('_jupyter_token')
+                else:
+                    section = 'General' if 'General/ssh_server' in task_parameters else default_section
+                    ssh_password = task_parameters.get('{}/ssh_password'.format(section)) or state.get('password', '')
+                    jupyter_token = task_parameters.get('properties/jupyter_token')
+
                 remote_address = \
                     task_parameters.get('properties/k8s-gateway-address') or \
                     task_parameters.get('properties/external_address')
-                ssh_password = task_parameters.get('{}/ssh_password'.format(section)) or state.get('password', '')
                 internal_ssh_port = task_parameters.get('properties/internal_ssh_port')
                 jupyter_port = task_parameters.get('properties/jupyter_port')
-                jupyter_token = task_parameters.get('properties/jupyter_token')
                 ssh_port = \
                     task_parameters.get('properties/k8s-pod-port') or \
                     task_parameters.get('properties/external_ssh_port') or internal_ssh_port
@@ -671,7 +788,7 @@ def monitor_ssh_tunnel(state, task):
                     state.get('username') or 'root',
                     remote_address, ssh_port, ssh_password,
                     local_remote_pair_list=local_remote_pair_list,
-                    debug=state.get('debug', False),
+                    debug=state.get('verbose', False),
                 )
 
                 if ssh_process and ssh_process.isalive():
@@ -826,8 +943,9 @@ def setup_parser(parser):
     parser.add_argument('--username', type=str, default=None,
                         help='Advanced: Select ssh username for the interactive session '
                              '(default: `root` or previously used one)')
-    parser.add_argument('--debug', action='store_true', default=None,
-                        help='Advanced: If set, print debugging information')
+    parser.add_argument('--verbose', action='store_true', default=None,
+                        help='Advanced: If set, print verbose progress information, '
+                             'e.g. the remote machine setup process log')
 
 
 def get_version():
@@ -862,8 +980,8 @@ def cli():
     state_file = os.path.abspath(os.path.expandvars(os.path.expanduser(args.config_file)))
     state = load_state(state_file)
 
-    if args.debug:
-        state['debug'] = args.debug
+    if args.verbose:
+        state['verbose'] = args.verbose
 
     client = APIClient()
 

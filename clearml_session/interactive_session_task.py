@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import socket
@@ -13,6 +14,7 @@ import psutil
 from pathlib2 import Path
 
 from clearml import Task, StorageManager
+from clearml.backend_api import Session
 
 
 # noinspection SpellCheckingInspection
@@ -97,7 +99,25 @@ def init_task(param, a_default_ssh_fingerprint):
         project_name="DevOps", task_name="Allocate Jupyter Notebook Instance", task_type=Task.TaskTypes.service)
 
     # Add jupyter server base folder
-    task.connect(param, name=config_section_name)
+    if Session.check_min_api_version('2.13'):
+        param.pop('user_key', None)
+        param.pop('user_secret', None)
+        param.pop('ssh_password', None)
+        task.connect(param, name=config_section_name)
+        # noinspection PyProtectedMember
+        runtime_prop = dict(task._get_runtime_properties())
+        # remove the user key/secret the moment we have it
+        param['user_key'] = runtime_prop.pop('_user_key', None)
+        param['user_secret'] = runtime_prop.pop('_user_secret', None)
+        # no need to reset, we will need it
+        param['ssh_password'] = runtime_prop.get('_ssh_password')
+        # Force removing properties
+        # noinspection PyProtectedMember
+        task._edit(runtime=runtime_prop)
+        task.reload()
+    else:
+        task.connect(param, name=config_section_name)
+
     # connect ssh finger print configuration (with fallback if section is missing)
     old_default_ssh_fingerprint = deepcopy(a_default_ssh_fingerprint)
     try:
@@ -123,16 +143,17 @@ def setup_os_env(param):
         "_API_SECRET_KEY",
         "_API_HOST_VERIFY_CERT",
         "_DOCKER_IMAGE",
+        "_DOCKER_BASH_SCRIPT",
     )
     # set default docker image, with network configuration
     if param.get('default_docker', '').strip():
-        os.environ["TRAINS_DOCKER_IMAGE"] = param['default_docker'].strip()
         os.environ["CLEARML_DOCKER_IMAGE"] = param['default_docker'].strip()
 
     # setup os environment
     env = deepcopy(os.environ)
     for key in os.environ:
-        if (key.startswith("TRAINS") or key.startswith("CLEARML")) and not any(key.endswith(p) for p in preserve):
+        # only set CLEARML_ remove any TRAINS_
+        if key.startswith("TRAINS") or (key.startswith("CLEARML") and not any(key.endswith(p) for p in preserve)):
             env.pop(key, None)
 
     return env
@@ -188,8 +209,7 @@ def monitor_jupyter_server(fd, local_filename, process, task, jupyter_port, host
         # we could not locate the token, try again
         if not token:
             continue
-        # update the task with the correct links and token
-        task.set_parameter(name='properties/jupyter_token', value=str(token))
+
         # we ignore the reported port, because jupyter server will get confused
         # if we have multiple servers running and will point to the wrong port/server
         task.set_parameter(name='properties/jupyter_port', value=str(jupyter_port))
@@ -197,8 +217,20 @@ def monitor_jupyter_server(fd, local_filename, process, task, jupyter_port, host
             'https' if "https://" in line else 'http',
             hostnames, jupyter_port, token
         )
+
+        # update the task with the correct links and token
+        if Session.check_min_api_version("2.13"):
+            # noinspection PyProtectedMember
+            runtime_prop = task._get_runtime_properties()
+            runtime_prop['_jupyter_token'] = str(token)
+            runtime_prop['_jupyter_url'] = str(jupyter_url)
+            # noinspection PyProtectedMember
+            task._set_runtime_properties(runtime_prop)
+        else:
+            task.set_parameter(name='properties/jupyter_token', value=str(token))
+            task.set_parameter(name='properties/jupyter_url', value=jupyter_url)
+
         print('\nJupyter Lab URL: {}\n'.format(jupyter_url))
-        task.set_parameter(name='properties/jupyter_url', value=jupyter_url)
 
     # cleanup
     # noinspection PyBroadException
@@ -219,8 +251,8 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
     # get vscode version and python extension version
     # they are extremely flaky, this combination works, most do not.
-    vscode_version = '3.9.2'
-    python_ext_version = '2021.3.658691958'
+    vscode_version = '3.12.0'
+    python_ext_version = '2021.10.1365161279'
     if param.get("vscode_version"):
         vscode_version_parts = param.get("vscode_version").split(':')
         vscode_version = vscode_version_parts[0]
@@ -291,7 +323,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
                 "--extensions-dir", exts_folder,
                 "--install-extension", "ms-toolsai.jupyter",
                 # "--install-extension", "donjayamanne.python-extension-pack"
-            ] + ["--install-extension", python_ext] if python_ext else [],
+            ] + ["--install-extension", "ms-python.python@{}".format(python_ext_version)] if python_ext else [],
             env=env,
             stdout=fd,
             stderr=fd,
@@ -343,7 +375,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
         print('no jupyterlab to monitor - going to sleep')
         while True:
             sleep(10.)
-        return
+        return  # noqa
 
     # execute jupyter notebook
     fd, local_filename = mkstemp()
@@ -418,15 +450,15 @@ def setup_ssh_server(hostname, hostnames, param, task):
                 "&& "  # noqa: W605
                 "echo 'ClientAliveInterval 10' >> /etc/ssh/sshd_config && "
                 "echo 'ClientAliveCountMax 20' >> /etc/ssh/sshd_config && "
-                "echo 'AcceptEnv TRAINS_API_ACCESS_KEY TRAINS_API_SECRET_KEY "
+                "echo 'AcceptEnv CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY "
                 "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY' >> /etc/ssh/sshd_config && "
                 'echo "export VISIBLE=now" >> /etc/profile && '
                 'echo "export PATH=$PATH" >> /etc/profile && '
                 'echo "ldconfig" >> /etc/profile && '
-                'echo "export TRAINS_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
+                'echo "export CLEARML_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
                     password=ssh_password,
                     port=port,
-                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("TRAINS_CONFIG_FILE"),
+                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("CLEARML_CONFIG_FILE"),
                 )
             )
             sshd_path = '/usr/sbin/sshd'
@@ -449,7 +481,7 @@ def setup_ssh_server(hostname, hostnames, param, task):
                         "UsePAM yes" + "\n"\
                         "AuthorizedKeysFile {}".format(os.path.join(ssh_config_path, 'authorized_keys')) + "\n"\
                         "PidFile {}".format(os.path.join(ssh_config_path, 'sshd.pid')) + "\n"\
-                        "AcceptEnv TRAINS_API_ACCESS_KEY TRAINS_API_SECRET_KEY "\
+                        "AcceptEnv CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY "\
                         "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY"+"\n"
                     for k in default_ssh_fingerprint:
                         filename = os.path.join(ssh_config_path, '{}'.format(k.replace('__pub', '.pub')))
@@ -511,13 +543,23 @@ def setup_ssh_server(hostname, hostnames, param, task):
         print("Error: {}\n\n#\n# Error: SSH server could not be launched\n#\n".format(ex))
 
 
+def _b64_decode_file(encoded_string):
+    # noinspection PyBroadException
+    try:
+        import gzip
+        value = gzip.decompress(base64.decodebytes(encoded_string.encode('ascii'))).decode('utf8')
+        return value
+    except Exception:
+        return None
+
+
 def setup_user_env(param, task):
     env = setup_os_env(param)
     # do not change user bash/profile
     if os.geteuid() != 0:
         if param.get("user_key") and param.get("user_secret"):
-            env['TRAINS_API_ACCESS_KEY'] = param.get("user_key")
-            env['TRAINS_API_SECRET_KEY'] = param.get("user_secret")
+            env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
+            env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
         return env
 
     # create symbolic link to the venv
@@ -530,20 +572,20 @@ def setup_user_env(param, task):
         pass
     # set default user credentials
     if param.get("user_key") and param.get("user_secret"):
-        os.system("echo 'export TRAINS_API_ACCESS_KEY=\"{}\"' >> ~/.bashrc".format(
+        os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.bashrc".format(
             param.get("user_key", "").replace('$', '\\$')))
-        os.system("echo 'export TRAINS_API_SECRET_KEY=\"{}\"' >> ~/.bashrc".format(
+        os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.bashrc".format(
             param.get("user_secret", "").replace('$', '\\$')))
-        os.system("echo 'export TRAINS_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
-            param.get("default_docker", "").strip() or env.get('TRAINS_DOCKER_IMAGE', '')))
-        os.system("echo 'export TRAINS_API_ACCESS_KEY=\"{}\"' >> ~/.profile".format(
+        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
+            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+        os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.profile".format(
             param.get("user_key", "").replace('$', '\\$')))
-        os.system("echo 'export TRAINS_API_SECRET_KEY=\"{}\"' >> ~/.profile".format(
+        os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.profile".format(
             param.get("user_secret", "").replace('$', '\\$')))
-        os.system("echo 'export TRAINS_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
-            param.get("default_docker", "").strip() or env.get('TRAINS_DOCKER_IMAGE', '')))
-        env['TRAINS_API_ACCESS_KEY'] = param.get("user_key")
-        env['TRAINS_API_SECRET_KEY'] = param.get("user_secret")
+        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
+            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+        env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
+        env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
     # set default folder for user
     if param.get("user_base_directory"):
         base_dir = param.get("user_base_directory")
@@ -557,8 +599,27 @@ def setup_user_env(param, task):
     os.system("echo '. {}' >> ~/.profile".format(os.path.join(environment, 'bin', 'activate')))
 
     # check if we need to create .git-credentials
-    # noinspection PyProtectedMember
-    git_credentials = task._get_configuration_text('git_credentials')
+
+    runtime_property_support = Session.check_min_api_version("2.13")
+    if runtime_property_support:
+        # noinspection PyProtectedMember
+        runtime_prop = dict(task._get_runtime_properties())
+        git_credentials = runtime_prop.pop('_git_credentials', None)
+        git_config = runtime_prop.pop('_git_config', None)
+        # force removing properties
+        # noinspection PyProtectedMember
+        task._edit(runtime=runtime_prop)
+        task.reload()
+        if git_credentials is not None:
+            git_credentials = _b64_decode_file(git_credentials)
+        if git_config is not None:
+            git_config = _b64_decode_file(git_config)
+    else:
+        # noinspection PyProtectedMember
+        git_credentials = task._get_configuration_text('git_credentials')
+        # noinspection PyProtectedMember
+        git_config = task._get_configuration_text('git_config')
+
     if git_credentials:
         git_cred_file = os.path.expanduser('~/.config/git/credentials')
         # noinspection PyBroadException
@@ -568,8 +629,7 @@ def setup_user_env(param, task):
                 f.write(git_credentials)
         except Exception:
             print('Could not write {} file'.format(git_cred_file))
-    # noinspection PyProtectedMember
-    git_config = task._get_configuration_text('git_config')
+
     if git_config:
         git_config_file = os.path.expanduser('~/.config/git/config')
         # noinspection PyBroadException
