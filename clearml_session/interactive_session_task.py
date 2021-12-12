@@ -263,27 +263,40 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     env = dict(**env)
     env.pop('PYTHONPATH', None)
 
+    pre_installed = False
+    python_ext = None
+
     # find a free tcp port
     port = get_free_port(9000, 9100)
 
     if os.geteuid() == 0:
-        # installing VSCODE:
+        # check if preinstalled
+        # noinspection PyBroadException
         try:
-            python_ext = StorageManager.get_local_copy(
-                'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'.format(
-                    python_ext_version),
-                extract_archive=False)
-            code_server_deb = StorageManager.get_local_copy(
-                'https://github.com/cdr/code-server/releases/download/'
-                'v{version}/code-server_{version}_amd64.deb'.format(version=vscode_version),
-                extract_archive=False)
-            os.system("dpkg -i {}".format(code_server_deb))
-        except Exception as ex:
-            print("Failed installing vscode server: {}".format(ex))
-            return
-        vscode_path = 'code-server'
+            vscode_path = subprocess.check_output('which code-server', shell=True).decode().strip()
+            pre_installed = bool(vscode_path)
+        except Exception:
+            vscode_path = None
+
+        if not vscode_path:
+            # installing VSCODE:
+            try:
+                python_ext = StorageManager.get_local_copy(
+                    'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'.format(
+                        python_ext_version),
+                    extract_archive=False)
+                code_server_deb = StorageManager.get_local_copy(
+                    'https://github.com/cdr/code-server/releases/download/'
+                    'v{version}/code-server_{version}_amd64.deb'.format(version=vscode_version),
+                    extract_archive=False)
+                os.system("dpkg -i {}".format(code_server_deb))
+            except Exception as ex:
+                print("Failed installing vscode server: {}".format(ex))
+                return
+            vscode_path = 'code-server'
     else:
         python_ext = None
+        pre_installed = True
         # check if code-server exists
         # noinspection PyBroadException
         try:
@@ -312,51 +325,65 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
     try:
         fd, local_filename = mkstemp()
-        subprocess.Popen(
-            [
-                vscode_path,
-                "--auth",
-                "none",
-                "--bind-addr",
-                "127.0.0.1:{}".format(port),
-                "--user-data-dir", user_folder,
-                "--extensions-dir", exts_folder,
-                "--install-extension", "ms-toolsai.jupyter",
-                # "--install-extension", "donjayamanne.python-extension-pack"
-            ] + ["--install-extension", "ms-python.python@{}".format(python_ext_version)] if python_ext else [],
-            env=env,
-            stdout=fd,
-            stderr=fd,
-        )
-        settings = Path(os.path.expanduser(os.path.join(user_folder, 'User/settings.json')))
-        settings.parent.mkdir(parents=True, exist_ok=True)
-        # noinspection PyBroadException
-        try:
-            with open(settings.as_posix(), 'rt') as f:
-                base_json = json.load(f)
-        except Exception:
-            base_json = {}
-        # noinspection PyBroadException
-        try:
-            base_json.update({
-                "extensions.autoCheckUpdates": False,
-                "extensions.autoUpdate": False,
-                "python.pythonPath": sys.executable,
-                "terminal.integrated.shell.linux": "/bin/bash" if Path("/bin/bash").is_file() else None,
-            })
-            with open(settings.as_posix(), 'wt') as f:
-                json.dump(base_json, f)
-        except Exception:
-            pass
+        if pre_installed:
+            user_folder = os.path.expanduser("~/.local/share/code-server/")
+            if not os.path.isdir(user_folder):
+                user_folder = None
+                exts_folder = None
+            else:
+                exts_folder = os.path.expanduser("~/.local/share/code-server/extensions/")
+        else:
+            subprocess.Popen(
+                [
+                    vscode_path,
+                    "--auth",
+                    "none",
+                    "--bind-addr",
+                    "127.0.0.1:{}".format(port),
+                    "--user-data-dir", user_folder,
+                    "--extensions-dir", exts_folder,
+                    "--install-extension", "ms-toolsai.jupyter",
+                    # "--install-extension", "donjayamanne.python-extension-pack"
+                ] + ["--install-extension", "ms-python.python@{}".format(python_ext_version)] if python_ext else [],
+                env=env,
+                stdout=fd,
+                stderr=fd,
+            )
+
+        if user_folder:
+            settings = Path(os.path.expanduser(os.path.join(user_folder, 'User/settings.json')))
+            settings.parent.mkdir(parents=True, exist_ok=True)
+            # noinspection PyBroadException
+            try:
+                with open(settings.as_posix(), 'rt') as f:
+                    base_json = json.load(f)
+            except Exception:
+                base_json = {}
+            # noinspection PyBroadException
+            try:
+                base_json.update({
+                    "extensions.autoCheckUpdates": False,
+                    "extensions.autoUpdate": False,
+                    "python.pythonPath": sys.executable,
+                    "terminal.integrated.shell.linux": "/bin/bash" if Path("/bin/bash").is_file() else None,
+                })
+                with open(settings.as_posix(), 'wt') as f:
+                    json.dump(base_json, f)
+            except Exception:
+                pass
+
         proc = subprocess.Popen(
             ['bash', '-c',
-             '{} --auth none --bind-addr 127.0.0.1:{} --disable-update-check '
-             '--user-data-dir {} --extensions-dir {}'.format(vscode_path, port, user_folder, exts_folder)],
+             '{} --auth none --bind-addr 127.0.0.1:{} --disable-update-check {} {}'.format(
+                 vscode_path, port,
+                 '--user-data-dir \"{}\"'.format(user_folder) if user_folder else '',
+                 '--extensions-dir \"{}\"'.format(exts_folder) if exts_folder else '')],
             env=env,
             stdout=fd,
             stderr=fd,
             cwd=cwd,
         )
+
         try:
             error_code = proc.wait(timeout=1)
             raise ValueError("code-server failed starting, return code {}".format(error_code))
