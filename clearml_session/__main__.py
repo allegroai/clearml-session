@@ -723,7 +723,7 @@ def monitor_ssh_tunnel(state, task):
     vscode_port = None
 
     connect_state = {'reconnect': False}
-    if not state.get('disable_keepalive'):
+    if state.get('keepalive'):
         if state.get('jupyter_lab'):
             SingleThreadProxy(local_jupyter_port, local_jupyter_port_)
         if state.get('vscode_server'):
@@ -760,7 +760,7 @@ def monitor_ssh_tunnel(state, task):
                 ssh_port = \
                     task_parameters.get('properties/k8s-pod-port') or \
                     task_parameters.get('properties/external_ssh_port') or internal_ssh_port
-                if not state.get('disable_keepalive'):
+                if state.get('keepalive'):
                     internal_ssh_port = task_parameters.get('properties/internal_stable_ssh_port') or internal_ssh_port
                 local_remote_pair_list = [(local_ssh_port_, internal_ssh_port)]
                 if state.get('jupyter_lab'):
@@ -931,9 +931,10 @@ def setup_parser(parser):
                              '(default: previously used Task). Use `none` for the default interactive session')
     parser.add_argument('--project', type=str, default=None,
                         help='Advanced: Set the project name for the interactive session Task')
-    parser.add_argument('--disable-keepalive', action='store_true', default=None,
-                        help='Advanced: If set, disable the transparent proxy always keeping the sockets alive. '
-                             'Default: false, use transparent socket mitigating connection drops.')
+    parser.add_argument('--keepalive', default=False, nargs='?', const='true', metavar='true/false',
+                        type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
+                        help='Advanced: If set, enables the transparent proxy always keeping the sockets alive. '
+                             'Default: False, do not use transparent socket for mitigating connection drops.')
     parser.add_argument('--queue-excluded-tag', default=None, nargs='*',
                         help='Advanced: Excluded queues with this specific tag from the selection')
     parser.add_argument('--queue-include-tag', default=None, nargs='*',
