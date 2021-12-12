@@ -202,7 +202,7 @@ In the `clearml` web UI, find the experiment (Task) you wish to debug.
 Click on the ID button next to the Task name, and copy the unique ID.
 
 ``` bash
-clearml-session --debugging <experiment_id_here>
+clearml-session --debugging-session <experiment_id_here>
 ```
 
 Click on the JupyterLab/VSCode link, or connect directly to the SSH session
@@ -216,9 +216,12 @@ clearml-session --help
 ``` console
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]]
-                       [--debugging DEBUGGING] [--queue QUEUE]
-                       [--docker DOCKER] [--public-ip [true/false]]
+                       [--debugging-session TASK_ID] [--queue QUEUE]
+                       [--docker DOCKER] [--docker-args DOCKER_ARGS]
+                       [--public-ip [true/false]]
+                       [--remote-ssh-port REMOTE_SSH_PORT]
                        [--vscode-server [true/false]]
+                       [--vscode-version VSCODE_VERSION]
                        [--jupyter-lab [true/false]]
                        [--git-credentials [true/false]]
                        [--user-folder USER_FOLDER]
@@ -233,6 +236,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network] [--password PASSWORD]
                        [--username USERNAME]
+                       [--verbose]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -241,23 +245,34 @@ optional arguments:
   --version             Display the clearml-session utility version
   --attach [ATTACH]     Attach to running interactive session (default:
                         previous session)
-  --debugging DEBUGGING
+  --debugging-session TASK_ID
                         Pass existing Task id (experiment), create a copy of
                         the experiment on a remote machine, and launch
                         jupyter/ssh for interactive access. Example
-                        --debugging <task_id>
+                        --debugging-session <task_id>
   --queue QUEUE         Select the queue to launch the interactive session on
                         (default: previously used queue)
   --docker DOCKER       Select the docker image to use in the interactive
                         session on (default: previously used docker image or
                         `nvidia/cuda:10.1-runtime-ubuntu18.04`)
+  --docker-args DOCKER_ARGS
+                        Add additional arguments for the docker image to use
+                        in the interactive session on (default: previously
+                        used docker-args)
   --public-ip [true/false]
                         If True register the public IP of the remote machine.
                         Set if running on the cloud. Default: false (use for
                         local / on-premises)
+  --remote-ssh-port REMOTE_SSH_PORT
+                        Set the remote ssh server port, running on the agent`s
+                        machine. (default: 10022)
   --vscode-server [true/false]
                         Install vscode server (code-server) on interactive
                         session (default: true)
+  --vscode-version VSCODE_VERSION
+                        Set vscode server (code-server) version, as well as
+                        vscode python extension version <vscode:python-ext>
+                        (example: "3.7.4:2020.10.332292344")
   --jupyter-lab [true/false]
                         Install Jupyter-Lab on interactive session (default:
                         true)
@@ -284,8 +299,9 @@ optional arguments:
                         Advanced: Change the configuration file used to store
                         the previous state (default: ~/.clearml_session.json)
   --remote-gateway [REMOTE_GATEWAY]
-                        Advanced: Specify gateway ip/address to be passed to
-                        interactive session (for use with k8s ingestion / ELB)
+                        Advanced: Specify gateway ip/address:port to be passed
+                        to interactive session (for use with k8s ingestion /
+                        ELB)
   --base-task-id BASE_TASK_ID
                         Advanced: Set the base task ID for the interactive
                         session. (default: previously used Task). Use `none`
@@ -310,6 +326,9 @@ optional arguments:
                         used one)
   --username USERNAME   Advanced: Select ssh username for the interactive
                         session (default: `root` or previously used one)
+  --verbose             Advanced: If set, print verbose progress information,
+                        e.g. the remote machine setup process log
+
 
 Notice! all arguments are stored as new defaults for the next session
 ```
