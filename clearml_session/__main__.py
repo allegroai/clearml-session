@@ -260,7 +260,7 @@ def create_debugging_task(state, debug_task_id):
     return task
 
 
-def delete_old_tasks(client, base_task_id):
+def delete_old_tasks(state, client, base_task_id):
     print('Removing stale interactive sessions')
     current_user_id = _get_user_id(client)
     previous_tasks = client.tasks.get_all(**{
@@ -268,9 +268,13 @@ def delete_old_tasks(client, base_task_id):
         'parent': base_task_id or None,
         'system_tags': None if base_task_id else [system_tag],
         'page_size': 100, 'page': 0,
-        'user': [current_user_id], 'only_fields': ['id']
+        'user': [current_user_id],
+        'only_fields': ['id']
     })
-    for t in previous_tasks:
+
+    for i, t in enumerate(previous_tasks):
+        if state.get('verbose'):
+            print('Removing {}/{} stale sessions'.format(i+1, len(previous_tasks)))
         try:
             client.tasks.delete(task=t.id, force=True)
         except Exception as ex:
@@ -1012,7 +1016,7 @@ def cli():
         project_id = get_project_id(state)
 
         # remove old Tasks created by us.
-        delete_old_tasks(client, state.get('base_task_id'))
+        delete_old_tasks(state, client, state.get('base_task_id'))
 
         # Clone the Task and adjust parameters
         task = clone_task(state, project_id)
