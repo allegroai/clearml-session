@@ -582,6 +582,25 @@ def _b64_decode_file(encoded_string):
 
 def setup_user_env(param, task):
     env = setup_os_env(param)
+
+    # apply vault if we have it
+    vault_environment = {}
+    if param.get("user_key") and param.get("user_secret"):
+        # noinspection PyBroadException
+        try:
+            print('Applying vault configuration')
+            from clearml.backend_api.session.defs import ENV_ENABLE_ENV_CONFIG_SECTION, ENV_ENABLE_FILES_CONFIG_SECTION
+            prev_env, prev_files = ENV_ENABLE_ENV_CONFIG_SECTION.get(), ENV_ENABLE_FILES_CONFIG_SECTION.get()
+            ENV_ENABLE_ENV_CONFIG_SECTION.set(True), ENV_ENABLE_FILES_CONFIG_SECTION.set(True)
+            prev_envs = deepcopy(os.environ)
+            Session(api_key=param.get("user_key"), secret_key=param.get("user_secret"))
+            vault_environment = {k: v for k, v in os.environ.items() if prev_envs.get(k) != v}
+            ENV_ENABLE_ENV_CONFIG_SECTION.set(prev_env), ENV_ENABLE_FILES_CONFIG_SECTION.set(prev_files)
+            if vault_environment:
+                print('Vault environment added: {}'.format(list(vault_environment.keys())))
+        except Exception as ex:
+            print('Applying vault configuration failed: {}'.format(ex))
+
     # do not change user bash/profile
     if os.geteuid() != 0:
         if param.get("user_key") and param.get("user_secret"):
@@ -611,6 +630,8 @@ def setup_user_env(param, task):
             param.get("user_secret", "").replace('$', '\\$')))
         os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
             param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+        for k, v in vault_environment.items():
+            os.system("echo 'export {}=\"{}\"' >> ~/.profile".format(k, v))
         env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
         env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
     # set default folder for user
