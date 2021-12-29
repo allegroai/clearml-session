@@ -149,7 +149,7 @@ def create_base_task(state, project_name=None, task_name=None):
     task_script['working_dir'] = '.'
     task_script['entry_point'] = 'interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
-        ["clearml"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
+        ["clearml>=1.1.5rc6"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
 
     section, _, _ = _get_config_section_name()
@@ -805,9 +805,13 @@ def monitor_ssh_tunnel(state, task):
                         msg += \
                             '\nJupyter Lab URL: http://localhost:{local_jupyter_port}/?token={jupyter_token}'.format(
                                 local_jupyter_port=local_jupyter_port, jupyter_token=jupyter_token.rstrip())
+                        if state.get('user_folder'):
+                            msg += "&file-browser-path={}".format(state.get('user_folder'))
                     if vscode_port:
                         msg += '\nVSCode server available at http://localhost:{local_vscode_port}/'.format(
                             local_vscode_port=local_vscode_port)
+                        if state.get('user_folder'):
+                            msg += "?folder={}".format(state.get('user_folder'))
                     print(msg)
 
                     print('\nConnection is up and running\n'
