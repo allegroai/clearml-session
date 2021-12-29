@@ -632,6 +632,8 @@ def setup_user_env(param, task):
             param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
         for k, v in vault_environment.items():
             os.system("echo 'export {}=\"{}\"' >> ~/.profile".format(k, v))
+            os.system("echo 'export {}=\"{}\"' >> ~/.bashrc".format(k, v))
+            env[k] = str(v) if v else ""
         env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
         env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
     # set default folder for user
