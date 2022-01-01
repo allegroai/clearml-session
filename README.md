@@ -216,7 +216,7 @@ clearml-session --help
 ``` console
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]]
-                       [--debugging-session TASK_ID] [--queue QUEUE]
+                       [--debugging-session DEBUGGING_SESSION] [--queue QUEUE]
                        [--docker DOCKER] [--docker-args DOCKER_ARGS]
                        [--public-ip [true/false]]
                        [--remote-ssh-port REMOTE_SSH_PORT]
@@ -231,12 +231,11 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--config-file CONFIG_FILE]
                        [--remote-gateway [REMOTE_GATEWAY]]
                        [--base-task-id BASE_TASK_ID] [--project PROJECT]
-                       [--disable-keepalive]
+                       [--keepalive [true/false]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network] [--password PASSWORD]
-                       [--username USERNAME]
-                       [--verbose]
+                       [--username USERNAME] [--verbose]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -245,7 +244,7 @@ optional arguments:
   --version             Display the clearml-session utility version
   --attach [ATTACH]     Attach to running interactive session (default:
                         previous session)
-  --debugging-session TASK_ID
+  --debugging-session DEBUGGING_SESSION
                         Pass existing Task id (experiment), create a copy of
                         the experiment on a remote machine, and launch
                         jupyter/ssh for interactive access. Example
@@ -308,9 +307,10 @@ optional arguments:
                         for the default interactive session
   --project PROJECT     Advanced: Set the project name for the interactive
                         session Task
-  --disable-keepalive   Advanced: If set, disable the transparent proxy always
-                        keeping the sockets alive. Default: false, use
-                        transparent socket mitigating connection drops.
+  --keepalive [true/false]
+                        Advanced: If set, enables the transparent proxy always
+                        keeping the sockets alive. Default: False, do not use
+                        transparent socket for mitigating connection drops.
   --queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]
                         Advanced: Excluded queues with this specific tag from
                         the selection
@@ -328,7 +328,6 @@ optional arguments:
                         session (default: `root` or previously used one)
   --verbose             Advanced: If set, print verbose progress information,
                         e.g. the remote machine setup process log
-
 
 Notice! all arguments are stored as new defaults for the next session
 ```
