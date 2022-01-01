@@ -149,7 +149,7 @@ def create_base_task(state, project_name=None, task_name=None):
     task_script['working_dir'] = '.'
     task_script['entry_point'] = 'interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
-        ["clearml>=1.1.5rc6"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
+        ["clearml>=1.1.5"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
 
     section, _, _ = _get_config_section_name()
