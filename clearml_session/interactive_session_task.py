@@ -481,7 +481,7 @@ def setup_ssh_server(hostname, hostnames, param, task):
                 "CLEARML_API_ACCESS_KEY CLEARML_API_SECRET_KEY' >> /etc/ssh/sshd_config && "
                 'echo "export VISIBLE=now" >> /etc/profile && '
                 'echo "export PATH=$PATH" >> /etc/profile && '
-                'echo "ldconfig" >> /etc/profile && '
+                'echo "ldconfig" 2>/dev/null >> /etc/profile && '
                 'echo "export CLEARML_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
                     password=ssh_password,
                     port=port,
