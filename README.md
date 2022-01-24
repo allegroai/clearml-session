@@ -24,7 +24,10 @@ Starting a clearml (ob)session from your local machine triggers the following:
 - ClearML allocates a remote instance (GPU) from your dedicated pool
 - On the allocated instance it will spin **jupyter-lab** + **vscode server** + **SSH** access for
 interactive usage (i.e., development)
-- Clearml will start monitoring machine performance, allowing DevOps to detect stale instances and spin them down
+- ClearML will start monitoring machine performance, allowing DevOps to detect stale instances and spin them down
+
+> ℹ️ **Remote PyCharm:** You can also work with PyCharm in a remote session over SSH. Use the [PyCharm Plugin](https://github.com/allegroai/clearml-pycharm-plugin) to automatically sync local configurations with a remote session.
+
 
 ### Use-cases for remote interactive sessions:
 1. Development requires resources not available on the current developer's machines
@@ -69,7 +72,7 @@ See below for full CLI options.
 
 ## Frequently Asked Questions:
 
-#### How Does Clearml enable this?
+#### How Does ClearML enable this?
 
 The `clearml-session` creates a new interactive `Task` in the system (default project: DevOps).
 
