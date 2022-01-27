@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://app.community.clear.ml"><img src="https://github.com/allegroai/clearml/blob/master/docs/clearml-logo.svg?raw=true" width="250px"></a>
+<a href="https://app.clear.ml"><img src="https://github.com/allegroai/clearml/blob/master/docs/clearml-logo.svg?raw=true" width="250px"></a>
 
 ## **`clearml-session` </br> CLI for launching JupyterLab / VSCode on a remote machine**
 
