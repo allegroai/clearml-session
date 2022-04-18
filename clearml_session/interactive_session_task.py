@@ -339,7 +339,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
                     "--auth",
                     "none",
                     "--bind-addr",
-                    "127.0.0.1:{}".format(port),
+                    "0.0.0.0:{}".format(port),
                     "--user-data-dir", user_folder,
                     "--extensions-dir", exts_folder,
                     "--install-extension", "ms-toolsai.jupyter",
@@ -374,7 +374,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
         proc = subprocess.Popen(
             ['bash', '-c',
-             '{} --auth none --bind-addr 127.0.0.1:{} --disable-update-check {} {}'.format(
+             '{} --auth none --bind-addr 0.0.0.0:{} --disable-update-check {} {}'.format(
                  vscode_path, port,
                  '--user-data-dir \"{}\"'.format(user_folder) if user_folder else '',
                  '--extensions-dir \"{}\"'.format(exts_folder) if exts_folder else '')],
@@ -437,7 +437,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
             "--no-browser",
             "--allow-root",
             "--ip",
-            "127.0.0.1",
+            "0.0.0.0",
             "--port",
             str(port),
         ],
