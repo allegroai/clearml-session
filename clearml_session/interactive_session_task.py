@@ -468,7 +468,7 @@ def setup_ssh_server(hostname, hostnames, param, task):
             # noinspection SpellCheckingInspection
             os.system(
                 "export PYTHONPATH=\"\" && "
-                "([ ! -z $(which sshd) ] || (apt-get update && apt-get install -y openssh-server)) && "
+                "([ ! -z $(which sshd) ] || (apt-get update ; apt-get install -y openssh-server)) && "
                 "mkdir -p /var/run/sshd && "
                 "echo 'root:{password}' | chpasswd && "
                 "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && "
