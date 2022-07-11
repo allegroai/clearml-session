@@ -93,20 +93,20 @@ There is also a default docker image to use when initiating a task.
 This means that using **clearml-session**s
 with the autoscaler enabled, allows for turn-key secure development environment inside a docker of your choosing.
 
-Learn more about it [here]()
+Learn more about it [here](https://clear.ml/docs/latest/docs/guides/services/aws_autoscaler)
 
 #### Does this fit Work From Home situations?
 **YES**. Install `clearml-agent` on target machines inside the organization, connect over your company VPN 
 and use `clearml-session` to gain access to a dedicated on-prem machine with the docker of your choosing
 (with out-of-the-box support for any internal docker artifactory).
 
-Learn more about how to utilize your office workstations and on-prem machines [here]()
+Learn more about how to utilize your office workstations and on-prem machines [here](https://clear.ml/docs/latest/docs/clearml_agent)
 
 ## Tutorials
 
 ### Getting started
 
-Requirements `clearml` python package installed and configured (see detailed [instructions]())
+Requirements `clearml` python package installed and configured (see detailed [instructions](https://clear.ml/docs/latest/docs/getting_started/ds/ds_first_steps))
 ``` bash
 pip install clearml-session
 clearml-session --docker nvcr.io/nvidia/pytorch:20.11-py3 --git-credentilas
