@@ -109,7 +109,7 @@ Learn more about how to utilize your office workstations and on-prem machines [h
 Requirements `clearml` python package installed and configured (see detailed [instructions](https://clear.ml/docs/latest/docs/getting_started/ds/ds_first_steps))
 ``` bash
 pip install clearml-session
-clearml-session --docker nvcr.io/nvidia/pytorch:20.11-py3 --git-credentilas
+clearml-session --docker nvcr.io/nvidia/pytorch:20.11-py3 --git-credentials
 ```
 
 Wait for the machine to spin up:
