@@ -398,9 +398,17 @@ def get_user_inputs(args, parser, state, client):
             ask_queues = True
     if ask_queues:
         print('Select the queue (resource) you request:')
-        queues = sorted([q.name for q in client.queues.get_all(
-            system_tags=['-{}'.format(t) for t in state.get('queue_excluded_tag', ['internal'])] +
-                        ['{}'.format(t) for t in state.get('queue_include_tag', [])])])
+        queues = None
+        if not state.get('queue_include_tag') and not state.get('queue_excluded_tag'):
+            # try default queue listing "interactive"
+            queues = sorted([q.name for q in client.queues.get_all(system_tags=[str(system_tag)])])
+
+        # if we have nothing, we just search for everything
+        if not queues:
+            queues = sorted([q.name for q in client.queues.get_all(
+                system_tags=['-{}'.format(t) for t in state.get('queue_excluded_tag', ['internal'])] +
+                            ['{}'.format(t) for t in state.get('queue_include_tag', [])])])
+
         queues_list = '\n'.join('{}] {}'.format(i, q) for i, q in enumerate(queues))
         while True:
             try:
