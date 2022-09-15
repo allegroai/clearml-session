@@ -149,7 +149,8 @@ def create_base_task(state, project_name=None, task_name=None):
     task_script['working_dir'] = '.'
     task_script['entry_point'] = 'interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
-        ["clearml>=1.1.5"] + (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) +
+        ["clearml>=1.1.5"] +
+        (["jupyter", "jupyterlab", "jupyterlab_git", "traitlets"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
 
     section, _, _ = _get_config_section_name()
@@ -326,9 +327,8 @@ def _b64_encode_file(file):
         return None
 
 
-def get_project_id(state):
+def get_project_id(project_name):
     project_id = None
-    project_name = state.get('project') or None
     if project_name:
         projects = Task.get_projects()
         project_id = [p for p in projects if p.name == project_name]
@@ -457,13 +457,15 @@ def load_state(state_file):
     return state
 
 
-def clone_task(state, project_id):
+def clone_task(state, project_id=None):
     new_task = False
     if state.get('debugging_session'):
         print('Starting new debugging session to {}'.format(state.get('debugging_session')))
         task = create_debugging_task(state, state.get('debugging_session'))
     elif state.get('base_task_id'):
         print('Cloning base session {}'.format(state['base_task_id']))
+        project_id = \
+            project_id or (get_project_id(project_name=state.get('project')) if state.get('project') else None)
         task = Task.clone(source_task=state['base_task_id'], project=project_id, parent=state['base_task_id'])
         task.set_system_tags([system_tag])
     else:
@@ -654,6 +656,9 @@ def wait_for_machine(state, task):
         print('\n')
         
     if task.get_status() != 'in_progress':
+        log_lines = task.get_reported_console_output(10)
+        log_lines = "\n".join("\n".join("> " + l for l in line.split("\n")) for line in log_lines)
+        print("\n".join(log_lines.split("\n")[-10:]))
         raise ValueError("Remote setup failed (status={}) see details: {}".format(
             task.get_status(), task.get_output_log_web_page()))
     print('\nRemote machine is ready')
@@ -1025,14 +1030,11 @@ def cli():
         # save state
         save_state(state, state_file)
 
-        # get project name
-        project_id = get_project_id(state)
-
         # remove old Tasks created by us.
         delete_old_tasks(state, client, state.get('base_task_id'))
 
         # Clone the Task and adjust parameters
-        task = clone_task(state, project_id)
+        task = clone_task(state)
         state['task_id'] = task.id
         save_state(state, state_file)
 

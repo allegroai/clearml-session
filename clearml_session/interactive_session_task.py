@@ -263,6 +263,13 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     env = dict(**env)
     env.pop('PYTHONPATH', None)
 
+    python_ext_download_link = \
+        os.environ.get("CLEARML_SESSION_VSCODE_PY_EXT") or \
+        'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'
+    code_server_deb_download_link = \
+        os.environ.get("CLEARML_SESSION_VSCODE_SERVER_DEB") or \
+        'https://github.com/cdr/code-server/releases/download/v{version}/code-server_{version}_amd64.deb'
+
     pre_installed = False
     python_ext = None
 
@@ -282,12 +289,10 @@ def start_vscode_server(hostname, hostnames, param, task, env):
             # installing VSCODE:
             try:
                 python_ext = StorageManager.get_local_copy(
-                    'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'.format(
-                        python_ext_version),
+                    python_ext_download_link.format(python_ext_version),
                     extract_archive=False)
                 code_server_deb = StorageManager.get_local_copy(
-                    'https://github.com/cdr/code-server/releases/download/'
-                    'v{version}/code-server_{version}_amd64.deb'.format(version=vscode_version),
+                    code_server_deb_download_link.format(version=vscode_version),
                     extract_archive=False)
                 os.system("dpkg -i {}".format(code_server_deb))
             except Exception as ex:
