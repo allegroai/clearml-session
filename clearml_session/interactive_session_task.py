@@ -4,18 +4,16 @@ import os
 import socket
 import subprocess
 import sys
+from copy import deepcopy
+import getpass
+from tempfile import mkstemp, gettempdir
 from time import sleep
 
-import requests
-from copy import deepcopy
-from tempfile import mkstemp
-
 import psutil
-from pathlib2 import Path
-
+import requests
 from clearml import Task, StorageManager
 from clearml.backend_api import Session
-
+from pathlib2 import Path
 
 # noinspection SpellCheckingInspection
 default_ssh_fingerprint = {
@@ -322,7 +320,9 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     try:
         Path(cwd).mkdir(parents=True, exist_ok=True)
     except Exception:
-        pass
+        print("Warning: failed setting user base directory [{}] reverting to ~/".format(cwd))
+        cwd = os.path.expanduser("~/")
+
     print("Running VSCode Server on {} [{}] port {} at {}".format(hostname, hostnames, port, cwd))
     print("VSCode Server available: http://{}:{}/\n".format(hostnames, port))
     user_folder = os.path.join(cwd, ".vscode/user/")
@@ -429,7 +429,9 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
     try:
         Path(cwd).mkdir(parents=True, exist_ok=True)
     except Exception:
-        pass
+        print("Warning: failed setting user base directory [{}] reverting to ~/".format(cwd))
+        cwd = os.path.expanduser("~/")
+
     print(
         "Running Jupyter Notebook Server on {} [{}] port {} at {}".format(hostname, hostnames, port, cwd)
     )
@@ -454,7 +456,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
     return monitor_jupyter_server(fd, local_filename, process, task, port, hostnames)
 
 
-def setup_ssh_server(hostname, hostnames, param, task):
+def setup_ssh_server(hostname, hostnames, param, task, env):
     if not param.get("ssh_server"):
         return
 
@@ -467,6 +469,7 @@ def setup_ssh_server(hostname, hostnames, param, task):
         max_port = max(min_port+32, int(ssh_port.split(":")[-1]))
         port = get_free_port(min_port, max_port)
         proxy_port = get_free_port(min_port, max_port)
+        use_dropbear = False
 
         # if we are root, install open-ssh
         if os.geteuid() == 0:
@@ -500,9 +503,45 @@ def setup_ssh_server(hostname, hostnames, param, task):
             # check if sshd exists
             # noinspection PyBroadException
             try:
-                sshd_path = subprocess.check_output('which sshd', shell=True).decode().strip()
+                os.system('echo "export CLEARML_CONFIG_FILE={trains_config_file}" >> $HOME/.profile'.format(
+                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("CLEARML_CONFIG_FILE"),
+                ))
+            except Exception:
+                print("warning failed setting ~/.profile")
+
+            # check if shd is preinstalled
+            # noinspection PyBroadException
+            try:
+                # try running SSHd as non-root (currently bypassed, use dropbear instead)
+                sshd_path = None ## subprocess.check_output('which sshd', shell=True).decode().strip()
+                if not sshd_path:
+                    raise ValueError("sshd was not found")
+            except Exception:
+                # noinspection PyBroadException
+                try:
+                    print('SSHd was not found default to user space dropbear sshd server')
+                    dropbear_download_link = \
+                        os.environ.get("CLEARML_DROPBEAR_EXEC") or \
+                        'https://github.com/allegroai/dropbear/releases/download/DROPBEAR_CLEARML_2023.02/dropbearmulti'
+                    dropbear = StorageManager.get_local_copy(dropbear_download_link, extract_archive=False)
+                    os.chmod(dropbear, 0o744)
+                    sshd_path = dropbear
+                    use_dropbear = True
+
+                except Exception:
+                    print('Error: failed locating SSHd and dailed fetching `dropbear`, leaving!')
+                    return
+
+            # noinspection PyBroadException
+            try:
                 ssh_config_path = os.path.join(os.getcwd(), '.clearml_session_sshd')
-                Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
+                # noinspection PyBroadException
+                try:
+                    Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    ssh_config_path = os.path.join(gettempdir(), '.clearml_session_sshd')
+                    Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
+
                 custom_ssh_conf = os.path.join(ssh_config_path, 'sshd_config')
                 with open(custom_ssh_conf, 'wt') as f:
                     conf = \
@@ -521,14 +560,17 @@ def setup_ssh_server(hostname, hostnames, param, task):
 
                     f.write(conf)
             except Exception:
-                print('Error: Cannot install sshd (not root) and could not find sshd executable, leaving!')
+                print('Error: Cannot configure sshd, leaving!')
                 return
-            # clear the ssh password, we cannot change it
-            ssh_password = None
-            task.set_parameter('{}/ssh_password'.format(config_section_name), '')
+
+            if not use_dropbear:
+                # clear the ssh password, we cannot change it
+                ssh_password = None
+                task.set_parameter('{}/ssh_password'.format(config_section_name), '')
 
         # create fingerprint files
         Path(ssh_config_path).mkdir(parents=True, exist_ok=True)
+        keys_filename = {}
         for k, v in default_ssh_fingerprint.items():
             filename = os.path.join(ssh_config_path, '{}'.format(k.replace('__pub', '.pub')))
             try:
@@ -537,12 +579,35 @@ def setup_ssh_server(hostname, hostnames, param, task):
                 pass
             if v:
                 with open(filename, 'wt') as f:
-                    f.write(v + (' root@{}'.format(hostname) if filename.endswith('.pub') else ''))
+                    f.write(v + (' {}@{}'.format(
+                        getpass.getuser() or "root", hostname) if filename.endswith('.pub') else ''))
                 os.chmod(filename, 0o600 if filename.endswith('.pub') else 0o600)
+            keys_filename[k] = filename
 
         # run server in foreground so it gets killed with us
-        proc_args = [sshd_path, "-D", "-p", str(port)] + (["-f", custom_ssh_conf] if custom_ssh_conf else [])
-        proc = subprocess.Popen(args=proc_args)
+        if use_dropbear:
+            # convert key files
+            dropbear_key_files = []
+            for k, ssh_key_file in keys_filename.items():
+                # skip over the public keys, there is no need for them
+                if ssh_key_file.endswith(".pub"):
+                    continue
+                drop_key_file = ssh_key_file + ".dropbear"
+                try:
+                    os.system("{} dropbearconvert openssh dropbear {} {}".format(
+                        sshd_path, ssh_key_file, drop_key_file))
+                    if Path(drop_key_file).is_file():
+                        dropbear_key_files += ["-r", drop_key_file]
+                except Exception:
+                    pass
+            proc_args = [sshd_path, "dropbear", "-e", "-K", "30", "-I", "0", "-F", "-p", str(port)] + dropbear_key_files
+            # make sure we do not pass it along to others, work on a copy
+            env = deepcopy(env)
+            env["DROPBEAR_CLEARML_FIXED_PASSWORD"] = ssh_password
+        else:
+            proc_args = [sshd_path, "-D", "-p", str(port)] + (["-f", custom_ssh_conf] if custom_ssh_conf else [])
+
+        proc = subprocess.Popen(args=proc_args, env=env)
         # noinspection PyBroadException
         try:
             result = proc.wait(timeout=1)
@@ -600,7 +665,14 @@ def setup_user_env(param, task):
             prev_envs = deepcopy(os.environ)
             Session(api_key=param.get("user_key"), secret_key=param.get("user_secret"))
             vault_environment = {k: v for k, v in os.environ.items() if prev_envs.get(k) != v}
-            ENV_ENABLE_ENV_CONFIG_SECTION.set(prev_env), ENV_ENABLE_FILES_CONFIG_SECTION.set(prev_files)
+            if prev_env is None:
+                ENV_ENABLE_ENV_CONFIG_SECTION.pop()
+            else:
+                ENV_ENABLE_ENV_CONFIG_SECTION.set(prev_env)
+            if prev_files is None:
+                ENV_ENABLE_FILES_CONFIG_SECTION.pop()
+            else:
+                ENV_ENABLE_FILES_CONFIG_SECTION.set(prev_files)
             if vault_environment:
                 print('Vault environment added: {}'.format(list(vault_environment.keys())))
         except Exception as ex:
@@ -810,7 +882,7 @@ def main():
 
     env = setup_user_env(param, task)
 
-    setup_ssh_server(hostname, hostnames, param, task)
+    setup_ssh_server(hostname, hostnames, param, task, env)
 
     start_vscode_server(hostname, hostnames, param, task, env)
 
