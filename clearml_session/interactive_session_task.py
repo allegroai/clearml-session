@@ -683,12 +683,24 @@ def setup_user_env(param, task):
         except Exception as ex:
             print('Applying vault configuration failed: {}'.format(ex))
 
-    # do not change user bash/profile
+    # do not change user bash/profile if we are not running inside a container
     if os.geteuid() != 0:
-        if param.get("user_key") and param.get("user_secret"):
-            env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
-            env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
-        return env
+        # check if we are inside a container
+        is_container = False
+        try:
+            with open("/proc/1/sched", "rt") as f:
+                lines = f.readlines()
+                if lines and lines[0].split()[0] in ("bash", "sh", "zsh"):
+                    # this a container
+                    is_container = True
+        except Exception:  # noqa
+            pass
+
+        if not is_container:
+            if param.get("user_key") and param.get("user_secret"):
+                env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
+                env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
+            return env
 
     # create symbolic link to the venv
     environment = os.path.expanduser('~/environment')
