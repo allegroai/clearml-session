@@ -46,8 +46,7 @@ class TcpProxy(object):
                 resource.setrlimit(resource.RLIMIT_NOFILE, (max(4096, soft), hard))
         except Exception:
             pass
-        self._proxy_daemon_thread = threading.Thread(target=self.daemon)
-        self._proxy_daemon_thread.setDaemon(True)
+        self._proxy_daemon_thread = threading.Thread(target=self.daemon, daemon=True)
         self._proxy_daemon_thread.start()
 
     def get_thread(self):
@@ -349,8 +348,8 @@ class TcpProxy(object):
                     self.active_local_sockets[uuid] = {'local_socket': in_socket}
 
                 # check if thread is waiting
-                proxy_thread = threading.Thread(target=self.start_proxy_thread, args=(in_socket, uuid, init_data))
-                proxy_thread.setDaemon(True)
+                proxy_thread = threading.Thread(
+                    target=self.start_proxy_thread, args=(in_socket, uuid, init_data), daemon=True)
                 self.log("Starting proxy thread " + proxy_thread.name)
                 proxy_thread.start()
             except Exception as ex:

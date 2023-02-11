@@ -46,8 +46,7 @@ class SingleThreadProxy(object):
         self.server.listen(100)
         self.tgthost, self.tgtport = tgthost, tgtport
         self.buffer_size, self.delay = buffer_size, delay
-        self._proxy_daemon_thread = threading.Thread(target=self.main_loop)
-        self._proxy_daemon_thread.setDaemon(True)
+        self._proxy_daemon_thread = threading.Thread(target=self.main_loop, daemon=True)
         self._proxy_daemon_thread.start()
 
     def main_loop(self):
