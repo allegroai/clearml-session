@@ -460,6 +460,12 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
     if not param.get("ssh_server"):
         return
 
+    # make sure we do not pass it along to others, work on a copy
+    env = deepcopy(env)
+    env.pop('LOCAL_PYTHON', None)
+    env.pop('PYTHONPATH', None)
+    env.pop('DEBIAN_FRONTEND', None)
+
     print("Installing SSH Server on {} [{}]".format(hostname, hostnames))
     ssh_password = param.get("ssh_password", "training")
     # noinspection PyBroadException
@@ -601,8 +607,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                 except Exception:
                     pass
             proc_args = [sshd_path, "dropbear", "-e", "-K", "30", "-I", "0", "-F", "-p", str(port)] + dropbear_key_files
-            # make sure we do not pass it along to others, work on a copy
-            env = deepcopy(env)
+            # this is a copy oof `env` so there is nothing to worry about
             env["DROPBEAR_CLEARML_FIXED_PASSWORD"] = ssh_password
         else:
             proc_args = [sshd_path, "-D", "-p", str(port)] + (["-f", custom_ssh_conf] if custom_ssh_conf else [])
