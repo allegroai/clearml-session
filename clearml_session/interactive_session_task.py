@@ -827,6 +827,7 @@ def get_host_name(task, param):
                 external_addr = requests.get('https://checkip.amazonaws.com').text.strip()
             except Exception:
                 pass
+            task.set_parameter(name='properties/k8s-gateway-address', value=str(external_addr))
         task.set_parameter(name='properties/external_address', value=str(external_addr))
 
     return hostname, hostnames
