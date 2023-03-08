@@ -768,7 +768,6 @@ def monitor_ssh_tunnel(state, task):
                 remote_address = task_parameters.get('properties/k8s-gateway-address')
                 if bool(state.get('public_ip')):
                     remote_address = task_parameters.get('properties/external_address')
-                print(f"remote_address: {remote_address}")
                     
                 internal_ssh_port = task_parameters.get('properties/internal_ssh_port')
                 jupyter_port = task_parameters.get('properties/jupyter_port')
