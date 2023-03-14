@@ -14,6 +14,7 @@ import requests
 from clearml import Task, StorageManager
 from clearml.backend_api import Session
 from pathlib2 import Path
+from tcp_proxy import TcpProxy
 
 # noinspection SpellCheckingInspection
 default_ssh_fingerprint = {
