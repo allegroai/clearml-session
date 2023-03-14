@@ -249,7 +249,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
     # get vscode version and python extension version
     # they are extremely flaky, this combination works, most do not.
-    vscode_version = '3.12.0'
+    vscode_version = '4.10.0'
     python_ext_version = '2021.10.1365161279'
     if param.get("vscode_version"):
         vscode_version_parts = param.get("vscode_version").split(':')
@@ -266,7 +266,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
         'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'
     code_server_deb_download_link = \
         os.environ.get("CLEARML_SESSION_VSCODE_SERVER_DEB") or \
-        'https://github.com/cdr/code-server/releases/download/v{version}/code-server_{version}_amd64.deb'
+        'https://github.com/coder/code-server/releases/download/v{version}/code-server_{version}_amd64.deb'
 
     pre_installed = False
     python_ext = None
