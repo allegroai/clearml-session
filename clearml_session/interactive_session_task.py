@@ -499,7 +499,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                 'echo "export CLEARML_CONFIG_FILE={trains_config_file}" >> /etc/profile'.format(
                     password=ssh_password,
                     port=port,
-                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("CLEARML_CONFIG_FILE"),
+                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("TRAINS_CONFIG_FILE"),
                 )
             )
             sshd_path = '/usr/sbin/sshd'
@@ -510,7 +510,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
             # noinspection PyBroadException
             try:
                 os.system('echo "export CLEARML_CONFIG_FILE={trains_config_file}" >> $HOME/.profile'.format(
-                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("CLEARML_CONFIG_FILE"),
+                    trains_config_file=os.environ.get("CLEARML_CONFIG_FILE") or os.environ.get("TRAINS_CONFIG_FILE"),
                 ))
             except Exception:
                 print("warning failed setting ~/.profile")
