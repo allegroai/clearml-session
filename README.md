@@ -9,7 +9,7 @@
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/clearml-session.svg)](https://img.shields.io/pypi/pyversions/clearml-session.svg)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/clearml-session.svg)](https://img.shields.io/pypi/v/clearml-session.svg)
 [![PyPI status](https://img.shields.io/pypi/status/clearml-session.svg)](https://pypi.python.org/pypi/clearml-session/)
-[![Slack Channel](https://img.shields.io/badge/slack-%23clearml--community-blueviolet?logo=slack)](https://join.slack.com/t/allegroai-trains/shared_invite/zt-c0t13pty-aVUZZW1TSSSg2vyIGVPBhg)
+[![Slack Channel](https://img.shields.io/badge/slack-%23clearml--community-blueviolet?logo=slack)](https://join.slack.com/t/clearml/shared_invite/zt-1v74jzwkn-~XsuWB0btXOlfFQCh8DJQw)
 
 
 </div>
