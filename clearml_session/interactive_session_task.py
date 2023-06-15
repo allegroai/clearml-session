@@ -708,7 +708,9 @@ def setup_user_env(param, task):
     try:
         os.symlink(os.path.abspath(os.path.join(os.path.abspath(sys.executable), '..', '..')), environment)
         print('Virtual environment are available at {}'.format(environment))
-    except Exception:
+    except Exception as e:
+        print("Error: Exception while trying to create symlink. The Application will continue...")
+        print(e)
         pass
     # set default user credentials
     if param.get("user_key") and param.get("user_secret"):
