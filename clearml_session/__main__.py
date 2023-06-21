@@ -669,7 +669,7 @@ def wait_for_machine(state, task):
 def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_remote_pair_list, debug=False):
     print('Starting SSH tunnel')
     child = None
-    args = ['-N', '-C',
+    args = ['-C',
             '{}@{}'.format(username, remote_address), '-p', '{}'.format(ssh_port),
             '-o', 'UserKnownHostsFile=/dev/null',
             '-o', 'Compression=yes',
