@@ -589,7 +589,7 @@ def wait_for_machine(state, task):
             if stopped_counter > 5:
                 break
         # noinspection PyProtectedMember
-        status, message = task._get_status()
+        status, message = task.get_status_message() if hasattr(task, "get_status_message") else task._get_status()
         status = str(status)
         if last_status != status or last_message != message:
             # noinspection PyProtectedMember
