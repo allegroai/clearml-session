@@ -687,7 +687,7 @@ def wait_for_machine(state, task):
 
 
 def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_remote_pair_list, debug=False):
-    print('Starting SSH tunnel')
+    print('Starting SSH tunnel to {}@{}, port {}'.format(username, remote_address, ssh_port))
     child = None
     args = ['-N', '-C',
             '{}@{}'.format(username, remote_address), '-p', '{}'.format(ssh_port),
@@ -913,6 +913,8 @@ def setup_parser(parser):
                         help='Display the clearml-session utility version')
     parser.add_argument('--attach', default=False, nargs='?',
                         help='Attach to running interactive session (default: previous session)')
+    parser.add_argument("--shutdown", "-S", default=None, const="", nargs="?",
+                        help="Shut down an active session (default: previous session)")
     parser.add_argument('--debugging-session', type=str, default=None,
                         help='Pass existing Task id (experiment), create a copy of the experiment on a remote machine, '
                              'and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>')
@@ -1031,8 +1033,20 @@ def cli():
 
     client = APIClient()
 
+    if args.shutdown is not None:
+        task = _get_previous_session(
+            client, args, state, task_id=args.shutdown, verb="Shutting down",
+            question_verb="Shut down", ask_for_explicit_id=True
+        )
+        if not task:
+            print("No session to shut down, exiting")
+            return 1
+        task.mark_stopped()
+        print("Session #{} shut down, goodbye!".format(task.id))
+        return 0
+
     # get previous session, if it is running
-    task = _check_previous_session(client, args, state)
+    task = _get_previous_session(client, args, state, task_id=args.attach)
 
     if task:
         state['task_id'] = task.id
@@ -1079,12 +1093,12 @@ def cli():
     print('Leaving interactive session')
 
 
-def _check_previous_session(client, args, state):
+def _get_previous_session(
+    client, args, state, task_id=None, verb="Connecting to", question_verb="Connect to", ask_for_explicit_id=False
+):
     assume_yes = args.yes
-    # now let's see if we have the requested Task
-    if args.attach:
-        task_id = args.attach
-        print('Checking previous session')
+    if task_id:
+        print('Checking session #{}'.format(task_id))
         try:
             task = Task.get_task(task_id=task_id)
         except ValueError:
@@ -1092,9 +1106,13 @@ def _check_previous_session(client, args, state):
         status = task.get_status() if task else None
         if status == 'in_progress':
             if not args.debugging_session or task.parent == args.debugging_session:
-                # only ask if we were not requested directly
-                print('Using active session id={}'.format(task_id))
-                return task
+                if assume_yes or not ask_for_explicit_id:
+                    print("{} active session id={}".format(verb, task_id))
+                    return task
+                choice = input("{} active session id={} [Y]/n? ".format(question_verb, task_id))
+                if str(choice).strip().lower() in ("y", "yes"):
+                    return task
+                return None
         raise ValueError('Could not connect to requested session id={} - status \'{}\''.format(
             task_id, status or 'Not Found'))
 
@@ -1113,10 +1131,10 @@ def _check_previous_session(client, args, state):
     if len(running_task_ids_created) == 1:
         task_id = running_task_ids_created[0][0]
         if assume_yes:
-            print("Connecting to active session {}".format(task_id))
+            print("{} active session {}".format(verb, task_id))
         else:
-            choice = input("Connect to active session id={} [Y]/n? ".format(task_id))
-            if str(choice).strip().lower() not in ("n", "no"):
+            choice = input("{} active session id={} [Y]/n? ".format(question_verb, task_id))
+            if str(choice).strip().lower() in ("y", "yes"):
                 return Task.get_task(task_id=task_id)
 
     # multiple sessions running
@@ -1138,7 +1156,8 @@ def _check_previous_session(client, args, state):
             try:
                 choice = input(
                     session_list
-                    + "\nConnect to session [{}] or 'N' to skip: ".format(
+                    + "\n{} session [{}] or 'N' to skip: ".format(
+                        question_verb,
                         "0" if len(running_task_ids_created) <= 1 else "0-{}".format(len(running_task_ids_created) - 1)
                     )
                 )
