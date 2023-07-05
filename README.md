@@ -238,7 +238,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network] [--password PASSWORD]
-                       [--username USERNAME] [--verbose]
+                       [--username USERNAME] [--verbose] [--yes]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -331,6 +331,8 @@ optional arguments:
                         session (default: `root` or previously used one)
   --verbose             Advanced: If set, print verbose progress information,
                         e.g. the remote machine setup process log
-
+  --yes, -y             Automatic yes to prompts; assume "yes" as answer to
+                        all prompts and run non-interactively
+                        
 Notice! all arguments are stored as new defaults for the next session
 ```
