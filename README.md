@@ -9,7 +9,7 @@
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/clearml-session.svg)](https://img.shields.io/pypi/pyversions/clearml-session.svg)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/clearml-session.svg)](https://img.shields.io/pypi/v/clearml-session.svg)
 [![PyPI status](https://img.shields.io/pypi/status/clearml-session.svg)](https://pypi.python.org/pypi/clearml-session/)
-[![Slack Channel](https://img.shields.io/badge/slack-%23clearml--community-blueviolet?logo=slack)](https://join.slack.com/t/clearml/shared_invite/zt-1v74jzwkn-~XsuWB0btXOlfFQCh8DJQw)
+[![Slack Channel](https://img.shields.io/badge/slack-%23clearml--community-blueviolet?logo=slack)](https://joinslack.clear.ml)
 
 
 </div>
@@ -219,6 +219,7 @@ clearml-session --help
 ``` console
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]]
+                       [--shutdown [SHUTDOWN]]
                        [--debugging-session DEBUGGING_SESSION] [--queue QUEUE]
                        [--docker DOCKER] [--docker-args DOCKER_ARGS]
                        [--public-ip [true/false]]
@@ -247,6 +248,9 @@ optional arguments:
   --version             Display the clearml-session utility version
   --attach [ATTACH]     Attach to running interactive session (default:
                         previous session)
+  --shutdown [SHUTDOWN], -S [SHUTDOWN]
+                        Shut down an active session (default: previous
+                        session)
   --debugging-session DEBUGGING_SESSION
                         Pass existing Task id (experiment), create a copy of
                         the experiment on a remote machine, and launch
