@@ -24,6 +24,13 @@ from clearml.config import config_obj
 from clearml.backend_api import Session
 from .tcp_proxy import TcpProxy
 from .single_thread_proxy import SingleThreadProxy
+from .version import __version__
+
+# noinspection PyBroadException
+try:
+    Session.add_client(__package__.partition(".")[0].replace("_", "-"), __version__)  # noqa
+except Exception:
+    pass
 
 system_tag = 'interactive'
 default_docker_image = 'nvidia/cuda:10.1-runtime-ubuntu18.04'
@@ -153,7 +160,7 @@ def create_base_task(state, project_name=None, task_name=None):
     task_script['entry_point'] = 'interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
         ["clearml>=1.1.5"] +
-        (["jupyter", "jupyterlab", "jupyterlab_git", "traitlets"] if state.get('jupyter_lab') else []) +
+        (["jupyter", "jupyterlab", "traitlets"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
 
     section, _, _ = _get_config_section_name()
