@@ -696,7 +696,7 @@ def wait_for_machine(state, task):
 def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_remote_pair_list, debug=False):
     print('Starting SSH tunnel to {}@{}, port {}'.format(username, remote_address, ssh_port))
     child = None
-    args = ['-N', '-C',
+    args = ['-C',
             '{}@{}'.format(username, remote_address), '-p', '{}'.format(ssh_port),
             '-o', 'UserKnownHostsFile=/dev/null',
             '-o', 'Compression=yes',
@@ -717,7 +717,8 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
             args=args,
             logfile=fd, timeout=20, encoding='utf-8')
 
-        i = child.expect([r'(?i)password:', r'\(yes\/no\)', r'.*[$#] ', pexpect.EOF])
+        # Match only "(yes/no" in order to handle both (yes/no) and (yes/no/[fingerprint])
+        i = child.expect([r'(?i)password:', r'\(yes\/no', r'.*[$#] ', pexpect.EOF])
         if i == 0:
             child.sendline(ssh_password)
             try:
