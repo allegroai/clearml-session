@@ -170,9 +170,7 @@ It will shut down the remote session, free the resource and close the CLI
 
 ``` console
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
-Ctrl-C (or "quit") to abort (remote session rema
-Yes of course, current SSO supports Google/GitHub/BitBucket/... + SAML/LDAP (Usually with user permissions fully integrated to the LDAP)
-ins active)
+Ctrl-C (or "quit") to abort (remote session remains active)
 or "Shutdown" to shutdown remote interactive session
 
 shutdown
@@ -226,6 +224,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--remote-ssh-port REMOTE_SSH_PORT]
                        [--vscode-server [true/false]]
                        [--vscode-version VSCODE_VERSION]
+                       [--vscode-extensions VSCODE_EXTENSIONS]
                        [--jupyter-lab [true/false]]
                        [--git-credentials [true/false]]
                        [--user-folder USER_FOLDER]
@@ -239,7 +238,8 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network] [--password PASSWORD]
-                       [--username USERNAME] [--verbose] [--yes]
+                       [--username USERNAME] [--force_dropbear [true/false]]
+                       [--verbose] [--yes]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -279,6 +279,11 @@ optional arguments:
                         Set vscode server (code-server) version, as well as
                         vscode python extension version <vscode:python-ext>
                         (example: "3.7.4:2020.10.332292344")
+  --vscode-extensions VSCODE_EXTENSIONS
+                        Install additional vscode extensions, as well as
+                        vscode python extension (example: "ms-
+                        python.python,ms-python.black-formatter,ms-
+                        python.pylint,ms-python.flake8")
   --jupyter-lab [true/false]
                         Install Jupyter-Lab on interactive session (default:
                         true)
@@ -333,10 +338,12 @@ optional arguments:
                         used one)
   --username USERNAME   Advanced: Select ssh username for the interactive
                         session (default: `root` or previously used one)
+  --force_dropbear [true/false]
+                        Force using `dropbear` instead of SSHd
   --verbose             Advanced: If set, print verbose progress information,
                         e.g. the remote machine setup process log
   --yes, -y             Automatic yes to prompts; assume "yes" as answer to
                         all prompts and run non-interactively
-                        
+
 Notice! all arguments are stored as new defaults for the next session
 ```
