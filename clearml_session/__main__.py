@@ -537,6 +537,8 @@ def clone_task(state, project_id=None):
     task_params["{}/public_ip".format(section)] = bool(state.get('public_ip'))
     task_params["{}/ssh_ports".format(section)] = state.get('remote_ssh_port') or ''
     task_params["{}/vscode_version".format(section)] = state.get('vscode_version') or ''
+    task_params["{}/vscode_extensions".format(section)] = state.get('vscode_extensions') or ''
+    task_params["{}/force_dropbear".format(section)] = bool(state.get('force_dropbear'))
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
     docker = state.get('docker') or task.get_base_docker()
@@ -946,6 +948,10 @@ def setup_parser(parser):
     parser.add_argument('--vscode-version', type=str, default=None,
                         help='Set vscode server (code-server) version, as well as vscode python extension version '
                              '<vscode:python-ext> (example: "3.7.4:2020.10.332292344")')
+    parser.add_argument('--vscode-extensions', type=str, default=None,
+                        help='Install additional vscode extensions, as well as vscode python extension '
+                             '(example: "ms-python.python,ms-python.black-formatter,'
+                             'ms-python.pylint,ms-python.flake8")')
     parser.add_argument('--jupyter-lab', default=True, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Install Jupyter-Lab on interactive session (default: true)')
@@ -995,13 +1001,16 @@ def setup_parser(parser):
     parser.add_argument('--username', type=str, default=None,
                         help='Advanced: Select ssh username for the interactive session '
                              '(default: `root` or previously used one)')
+    parser.add_argument('--force_dropbear', default=None, nargs='?', const='true', metavar='true/false',
+                        type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
+                        help='Force using `dropbear` instead of SSHd')
     parser.add_argument('--verbose', action='store_true', default=None,
                         help='Advanced: If set, print verbose progress information, '
                              'e.g. the remote machine setup process log')
-    parser.add_argument("--yes", "-y",
-                        action="store_true", default=False,
-                        help="Automatic yes to prompts; assume \"yes\" as answer "
-                             "to all prompts and run non-interactively",)
+    parser.add_argument('--yes', '-y',
+                        action='store_true', default=False,
+                        help='Automatic yes to prompts; assume \"yes\" as answer '
+                             'to all prompts and run non-interactively',)
 
 
 def get_version():
@@ -1142,11 +1151,11 @@ def _get_previous_session(
             print("{} active session {}".format(verb, task_id))
         else:
             choice = input("{} active session id={} [Y]/n? ".format(question_verb, task_id))
-            if str(choice).strip().lower() in ("y", "yes"):
+            if str(choice).strip().lower() in ("", "y", "yes"):
                 return Task.get_task(task_id=task_id)
 
     # multiple sessions running
-    print('Active sessions:')
+    print("{} active session:".format(verb))
     try:
         prev_task_id = state.get('task_id')
         default_i = next(i for i, (tid, _, _) in enumerate(running_task_ids_created) if prev_task_id == tid)

@@ -249,8 +249,8 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
     # get vscode version and python extension version
     # they are extremely flaky, this combination works, most do not.
-    vscode_version = '4.10.0'
-    python_ext_version = '2021.10.1365161279'
+    vscode_version = '4.14.1'
+    python_ext_version = '2023.12.0'
     if param.get("vscode_version"):
         vscode_version_parts = param.get("vscode_version").split(':')
         vscode_version = vscode_version_parts[0]
@@ -338,6 +338,30 @@ def start_vscode_server(hostname, hostnames, param, task, env):
             else:
                 exts_folder = os.path.expanduser("~/.local/share/code-server/extensions/")
         else:
+            vscode_extensions = param.get("vscode_extensions") or ""
+            vscode_extensions_cmd = []
+            jupyter_ext_version = True
+            for ext in vscode_extensions.split(","):
+                ext = ext.strip()
+                if not ext:
+                    continue
+
+                if ext.startswith("ms-python.python"):
+                    python_ext_version = python_ext = None
+                elif ext.startswith("ms-toolsai.jupyter"):
+                    jupyter_ext_version = None
+
+                vscode_extensions_cmd += ["--install-extension", ext]
+
+            if python_ext:
+                vscode_extensions_cmd += ["--install-extension", "{}".format(python_ext)]
+            elif python_ext_version:
+                vscode_extensions_cmd += ["--install-extension", "ms-python.python@{}".format(python_ext_version)]
+
+            if jupyter_ext_version:
+                vscode_extensions_cmd += ["--install-extension", "ms-toolsai.jupyter"]
+
+            print("VScode extensions: {}".format(vscode_extensions_cmd))
             subprocess.Popen(
                 [
                     vscode_path,
@@ -347,9 +371,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
                     "127.0.0.1:{}".format(port),
                     "--user-data-dir", user_folder,
                     "--extensions-dir", exts_folder,
-                    "--install-extension", "ms-toolsai.jupyter",
-                    # "--install-extension", "donjayamanne.python-extension-pack"
-                ] + ["--install-extension", "ms-python.python@{}".format(python_ext_version)] if python_ext else [],
+                ] + vscode_extensions_cmd,
                 env=env,
                 stdout=fd,
                 stderr=fd,
@@ -397,6 +419,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
     except Exception as ex:
         print('Failed running vscode server: {}'.format(ex))
+        task.set_parameter(name='properties/vscode_port', value=str(-1))
         return
 
     task.set_parameter(name='properties/vscode_port', value=str(port))
@@ -475,10 +498,10 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
         max_port = max(min_port+32, int(ssh_port.split(":")[-1]))
         port = get_free_port(min_port, max_port)
         proxy_port = get_free_port(min_port, max_port)
-        use_dropbear = False
+        use_dropbear = bool(param.get("force_dropbear", False))
 
         # if we are root, install open-ssh
-        if os.geteuid() == 0:
+        if not use_dropbear and os.geteuid() == 0:
             # noinspection SpellCheckingInspection
             os.system(
                 "export PYTHONPATH=\"\" && "
@@ -535,7 +558,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                     use_dropbear = True
 
                 except Exception:
-                    print('Error: failed locating SSHd and dailed fetching `dropbear`, leaving!')
+                    print('Error: failed locating SSHd and failed fetching `dropbear`, leaving!')
                     return
 
             # noinspection PyBroadException
@@ -588,7 +611,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                     f.write(v + (' {}@{}'.format(
                         getpass.getuser() or "root", hostname) if filename.endswith('.pub') else ''))
                 os.chmod(filename, 0o600 if filename.endswith('.pub') else 0o600)
-            keys_filename[k] = filename
+                keys_filename[k] = filename
 
         # run server in foreground so it gets killed with us
         if use_dropbear:
@@ -596,7 +619,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
             dropbear_key_files = []
             for k, ssh_key_file in keys_filename.items():
                 # skip over the public keys, there is no need for them
-                if ssh_key_file.endswith(".pub"):
+                if not ssh_key_file or ssh_key_file.endswith(".pub"):
                     continue
                 drop_key_file = ssh_key_file + ".dropbear"
                 try:
@@ -607,8 +630,9 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                 except Exception:
                     pass
             proc_args = [sshd_path, "dropbear", "-e", "-K", "30", "-I", "0", "-F", "-p", str(port)] + dropbear_key_files
-            # this is a copy oof `env` so there is nothing to worry about
-            env["DROPBEAR_CLEARML_FIXED_PASSWORD"] = ssh_password
+            # this is a copy of `env` so there is nothing to worry about
+            if ssh_password:
+                env["DROPBEAR_CLEARML_FIXED_PASSWORD"] = ssh_password
         else:
             proc_args = [sshd_path, "-D", "-p", str(port)] + (["-f", custom_ssh_conf] if custom_ssh_conf else [])
 
@@ -711,7 +735,7 @@ def setup_user_env(param, task):
     except Exception as e:
         print("Error: Exception while trying to create symlink. The Application will continue...")
         print(e)
-        pass
+
     # set default user credentials
     if param.get("user_key") and param.get("user_secret"):
         os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.bashrc".format(
@@ -889,9 +913,11 @@ def main():
         "user_secret": None,
         "vscode_server": True,
         "vscode_version": '',
+        "vscode_extensions": '',
         "jupyterlab": True,
         "public_ip": False,
         "ssh_ports": None,
+        "force_dropbear": False,
     }
     task = init_task(param, default_ssh_fingerprint)
 
