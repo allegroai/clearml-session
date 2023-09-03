@@ -140,7 +140,7 @@ VSCode server available at http://localhost:8898/
 Connection is up and running
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
 Ctrl-C (or "quit") to abort (remote session remains active)
-or "Shutdown" to shutdown remote interactive session
+or "Shutdown" to shut down remote interactive session
 ```
 
 Click on the JupyterLab link (http://localhost:8878/?token=xyz)
@@ -171,7 +171,7 @@ It will shut down the remote session, free the resource and close the CLI
 ``` console
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
 Ctrl-C (or "quit") to abort (remote session remains active)
-or "Shutdown" to shutdown remote interactive session
+or "Shutdown" to shut down remote interactive session
 
 shutdown
 
@@ -217,7 +217,7 @@ clearml-session --help
 ``` console
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]]
-                       [--shutdown [SHUTDOWN]]
+                       [--shutdown [SHUTDOWN]] [--interactive]
                        [--debugging-session DEBUGGING_SESSION] [--queue QUEUE]
                        [--docker DOCKER] [--docker-args DOCKER_ARGS]
                        [--public-ip [true/false]]
@@ -249,8 +249,9 @@ optional arguments:
   --attach [ATTACH]     Attach to running interactive session (default:
                         previous session)
   --shutdown [SHUTDOWN], -S [SHUTDOWN]
-                        Shut down an active session (default: previous
-                        session)
+                        Shut down an active session (default: previous session)
+  --interactive, -I     open the SSH session directly, notice quiting the SSH session will 
+                        Not shutdown the remote session                        
   --debugging-session DEBUGGING_SESSION
                         Pass existing Task id (experiment), create a copy of
                         the experiment on a remote machine, and launch

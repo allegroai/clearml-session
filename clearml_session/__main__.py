@@ -481,6 +481,7 @@ def load_state(state_file):
     # never reload --verbose and --yes states
     state.pop('verbose', None)
     state.pop('yes', None)
+    state.pop('interactive', None)
     return state
 
 
@@ -753,10 +754,26 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
         child.terminate(force=True)
         child = None
     print('\n')
+    child.logfile = None
     return child, ssh_password
 
 
 def monitor_ssh_tunnel(state, task):
+    def interactive_ssh(p):
+        import struct, fcntl, termios, signal, sys  # noqa
+
+        def sigwinch_passthrough(sig, data):
+            s = struct.pack("HHHH", 0, 0, 0, 0)
+            a = struct.unpack('hhhh', fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, s))
+            if not p.closed:
+                p.setwinsize(a[0], a[1])
+
+        print("Switching to active SSH session, press ``Ctrl - ]`` to leave")
+        # Note this 'p' is global and used in sigwinch_passthrough.
+        signal.signal(signal.SIGWINCH, sigwinch_passthrough)
+        p.interact()
+        print("\nSSH session running in background\n")
+
     print('Setting up connection to remote session')
     local_jupyter_port, local_jupyter_port_, local_ssh_port, local_ssh_port_, local_vscode_port, local_vscode_port_ = \
         _get_available_ports([8878, 8878+1,  8022, 8022+1, 8898, 8898+1])
@@ -780,9 +797,18 @@ def monitor_ssh_tunnel(state, task):
 
     default_section = _get_config_section_name()[0]
     local_remote_pair_list = []
+    shutdown = False
     try:
         while task.get_status() == 'in_progress':
-            if not all([ssh_port, jupyter_token, jupyter_port, internal_ssh_port, ssh_password, remote_address]):
+            if not all([
+                ssh_port,
+                not state.get('jupyter_lab') or jupyter_token,
+                not state.get('jupyter_lab') or jupyter_port,
+                not state.get('vscode_server') or vscode_port,
+                internal_ssh_port,
+                ssh_password,
+                remote_address
+            ]):
                 task.reload()
                 task_parameters = task.get_parameters()
                 if Session.check_min_api_version("2.13"):
@@ -859,14 +885,21 @@ def monitor_ssh_tunnel(state, task):
 
                     print('\nConnection is up and running\n'
                           'Enter \"r\" (or \"reconnect\") to reconnect the session (for example after suspend)\n'
-                          'Ctrl-C (or "quit") to abort (remote session remains active)\n'
-                          'or \"Shutdown\" to shutdown remote interactive session')
+                          '`i` (or "interactive") to connect to the SSH session\n'
+                          '`Ctrl-C` (or "quit") to abort (remote session remains active)\n'
+                          'or \"Shutdown\" to shut down remote interactive session')
                 else:
                     logging.getLogger().warning('SSH tunneling failed, retrying in {} seconds'.format(3))
                     sleep(3.)
                     continue
 
             connect_state['reconnect'] = False
+
+            # if interactive start with SSH interactive
+            if state.pop('interactive', None):
+                interactive_ssh(ssh_process)
+                # if we are in --interactive, when we leave the session we should leave the process
+                break
 
             # wait for user input
             user_input = _read_std_input(timeout=sleep_period)
@@ -885,9 +918,13 @@ def monitor_ssh_tunnel(state, task):
                     pass
                 continue
 
-            if user_input.lower() == 'shutdown':
+            if user_input.lower() in ('i', 'interactive',):
+                interactive_ssh(ssh_process)
+                continue
+            elif user_input.lower() == 'shutdown':
                 print('Shutting down interactive session')
                 task.mark_stopped()
+                shutdown = True
                 break
             elif user_input.lower() in ('r', 'reconnect', ):
                 print('Reconnecting to interactive session')
@@ -901,7 +938,7 @@ def monitor_ssh_tunnel(state, task):
             else:
                 print('unknown command: \'{}\''.format(user_input))
 
-        print('Interactive session ended')
+        print("Remote session shutdown" if shutdown else "Remote session still running!")
     except KeyboardInterrupt:
         print('\nUser aborted')
 
@@ -925,6 +962,9 @@ def setup_parser(parser):
                         help='Attach to running interactive session (default: previous session)')
     parser.add_argument("--shutdown", "-S", default=None, const="", nargs="?",
                         help="Shut down an active session (default: previous session)")
+    parser.add_argument("--interactive", "-I", action='store_true', default=None,
+                        help="open the SSH session directly, notice quiting the SSH session "
+                             "will Not shutdown the remote session")
     parser.add_argument('--debugging-session', type=str, default=None,
                         help='Pass existing Task id (experiment), create a copy of the experiment on a remote machine, '
                              'and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>')
@@ -1048,6 +1088,8 @@ def cli():
     if args.verbose:
         state['verbose'] = args.verbose
 
+    state['interactive'] = bool(args.interactive)
+
     client = APIClient()
 
     if args.shutdown is not None:
@@ -1107,7 +1149,7 @@ def cli():
     monitor_ssh_tunnel(state, task)
 
     # we are done
-    print('Leaving interactive session')
+    print('Goodbye')
 
 
 def _get_previous_session(

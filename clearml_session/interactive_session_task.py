@@ -243,7 +243,7 @@ def monitor_jupyter_server(fd, local_filename, process, task, jupyter_port, host
         pass
 
 
-def start_vscode_server(hostname, hostnames, param, task, env):
+def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1"):
     if not param.get("vscode_server"):
         return
 
@@ -368,7 +368,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
                     "--auth",
                     "none",
                     "--bind-addr",
-                    "127.0.0.1:{}".format(port),
+                    "{}:{}".format(bind_ip, port),
                     "--user-data-dir", user_folder,
                     "--extensions-dir", exts_folder,
                 ] + vscode_extensions_cmd,
@@ -401,8 +401,8 @@ def start_vscode_server(hostname, hostnames, param, task, env):
 
         proc = subprocess.Popen(
             ['bash', '-c',
-             '{} --auth none --bind-addr 127.0.0.1:{} --disable-update-check {} {}'.format(
-                 vscode_path, port,
+             '{} --auth none --bind-addr {}:{} --disable-update-check {} {}'.format(
+                 vscode_path, bind_ip, port,
                  '--user-data-dir \"{}\"'.format(user_folder) if user_folder else '',
                  '--extensions-dir \"{}\"'.format(exts_folder) if exts_folder else '')],
             env=env,
@@ -425,7 +425,7 @@ def start_vscode_server(hostname, hostnames, param, task, env):
     task.set_parameter(name='properties/vscode_port', value=str(port))
 
 
-def start_jupyter_server(hostname, hostnames, param, task, env):
+def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1"):
     if not param.get('jupyterlab', True):
         print('no jupyterlab to monitor - going to sleep')
         while True:
@@ -467,7 +467,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env):
             "--no-browser",
             "--allow-root",
             "--ip",
-            "127.0.0.1",
+            bind_ip,
             "--port",
             str(port),
         ],
