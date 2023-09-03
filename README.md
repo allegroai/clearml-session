@@ -139,7 +139,8 @@ VSCode server available at http://localhost:8898/
 
 Connection is up and running
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
-Ctrl-C (or "quit") to abort (remote session remains active)
+`i` (or "interactive") to connect to the SSH session
+`Ctrl-C` (or "quit") to abort (remote session remains active)
 or "Shutdown" to shut down remote interactive session
 ```
 
@@ -148,8 +149,8 @@ Open your terminal, clone your code & start working :)
 
 ### Leaving a session and reconnecting from the same machine
 
-On the `clearml-session` CLI terminal, enter 'quit' or press Ctrl-C
-It will close the CLI but leaves the remote session running
+On the `clearml-session` CLI terminal, enter 'quit' or press `Ctrl-C`
+It will close the CLI but preserve the remote session (i.e. remote session will remain running)
 
 When you want to reconnect to it, execute:
 ``` bash
@@ -170,14 +171,15 @@ It will shut down the remote session, free the resource and close the CLI
 
 ``` console
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
-Ctrl-C (or "quit") to abort (remote session remains active)
+`i` (or "interactive") to connect to the SSH session
+`Ctrl-C` (or "quit") to abort (remote session remains active)
 or "Shutdown" to shut down remote interactive session
 
 shutdown
 
 Shutting down interactive session
-Interactive session ended
-Leaving interactive session
+Remote session shutdown
+Goodbye
 ```
 
 ### Connecting to a running interactive session from a different machine
