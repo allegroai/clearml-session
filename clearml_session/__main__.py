@@ -7,6 +7,7 @@ import subprocess
 import sys
 from argparse import ArgumentParser, FileType
 from functools import reduce
+from getpass import getpass
 from io import TextIOBase, StringIO
 from time import time, sleep
 
@@ -727,7 +728,7 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
             try:
                 child.expect([r'(?i)password:'], timeout=5)
                 print('{}Error: incorrect password'.format(fd.read() + '\n' if debug else ''))
-                ssh_password = input('Please enter password manually: ')
+                ssh_password = getpass('Please enter password manually: ')
                 child.sendline(ssh_password)
                 child.expect([r'(?i)password:'], timeout=5)
                 print('{}Error: incorrect user input password'.format(fd.read() + '\n' if debug else ''))
@@ -743,7 +744,7 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
                 try:
                     child.expect([r'(?i)password:'], timeout=5)
                     print('Error: incorrect password')
-                    ssh_password = input('Please enter password manually: ')
+                    ssh_password = getpass('Please enter password manually: ')
                     child.sendline(ssh_password)
                     child.expect([r'(?i)password:'], timeout=5)
                     print('{}Error: incorrect user input password'.format(fd.read() + '\n' if debug else ''))
@@ -856,6 +857,16 @@ def monitor_ssh_tunnel(state, task):
                 except Exception:
                     pass
 
+            connect_message = (
+                '\nConnection is up and running\n'
+                'Enter \"r\" (or \"reconnect\") to reconnect the session (for example after suspend)\n'
+                '`i` (or "interactive") to connect to the SSH session\n'
+                '`Ctrl-C` (or "quit") to abort (remote session remains active)\n'
+                'or \"Shutdown\" to shut down remote interactive session'
+            )
+            short_console_msg = \
+                "Enter \"r\" (\"reconnect\"), `i` (\"interactive\"), `Ctrl-C` (\"quit\") or \"Shutdown\""
+
             if not ssh_process or not ssh_process.isalive():
                 ssh_process, ssh_password = start_ssh_tunnel(
                     state.get('username') or 'root',
@@ -882,12 +893,7 @@ def monitor_ssh_tunnel(state, task):
                         if state.get('user_folder'):
                             msg += "?folder={}".format(state.get('user_folder'))
                     print(msg)
-
-                    print('\nConnection is up and running\n'
-                          'Enter \"r\" (or \"reconnect\") to reconnect the session (for example after suspend)\n'
-                          '`i` (or "interactive") to connect to the SSH session\n'
-                          '`Ctrl-C` (or "quit") to abort (remote session remains active)\n'
-                          'or \"Shutdown\" to shut down remote interactive session')
+                    print(connect_message)
                 else:
                     logging.getLogger().warning('SSH tunneling failed, retrying in {} seconds'.format(3))
                     sleep(3.)
@@ -918,7 +924,10 @@ def monitor_ssh_tunnel(state, task):
                     pass
                 continue
 
-            if user_input.lower() in ('i', 'interactive',):
+            if not user_input:
+                print(short_console_msg)
+                continue
+            elif user_input.lower() in ('i', 'interactive',):
                 interactive_ssh(ssh_process)
                 continue
             elif user_input.lower() == 'shutdown':
