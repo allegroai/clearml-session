@@ -243,7 +243,7 @@ def monitor_jupyter_server(fd, local_filename, process, task, jupyter_port, host
         pass
 
 
-def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1"):
+def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1", port=None):
     if not param.get("vscode_server"):
         return
 
@@ -272,7 +272,7 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
     python_ext = None
 
     # find a free tcp port
-    port = get_free_port(9000, 9100)
+    port = get_free_port(9000, 9100) if not port else int(port)
 
     if os.geteuid() == 0:
         # check if preinstalled
@@ -327,6 +327,7 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
     print("VSCode Server available: http://{}:{}/\n".format(hostnames, port))
     user_folder = os.path.join(cwd, ".vscode/user/")
     exts_folder = os.path.join(cwd, ".vscode/exts/")
+    proc = None
 
     try:
         fd, local_filename = mkstemp()
@@ -388,6 +389,8 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
                 base_json = {}
             # noinspection PyBroadException
             try:
+                # Notice we are Not using "python.defaultInterpreterPath": sys.executable,
+                # because for some reason it breaks the auto python interpreter setup
                 base_json.update({
                     "extensions.autoCheckUpdates": False,
                     "extensions.autoUpdate": False,
@@ -423,9 +426,10 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
         return
 
     task.set_parameter(name='properties/vscode_port', value=str(port))
+    return proc
 
 
-def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1"):
+def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.1", port=None):
     if not param.get('jupyterlab', True):
         print('no jupyterlab to monitor - going to sleep')
         while True:
@@ -441,7 +445,7 @@ def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0
     )
 
     # find a free tcp port
-    port = get_free_port(8888, 9000)
+    port = get_free_port(8888, 9000) if not port else int(port)
 
     # if we are not running as root, make sure the sys executable is in the PATH
     env = dict(**env)
@@ -742,20 +746,31 @@ def setup_user_env(param, task):
             param.get("user_key", "").replace('$', '\\$')))
         os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.bashrc".format(
             param.get("user_secret", "").replace('$', '\\$')))
-        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
-            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
         os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.profile".format(
             param.get("user_key", "").replace('$', '\\$')))
         os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.profile".format(
             param.get("user_secret", "").replace('$', '\\$')))
+        env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
+        env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
+    elif os.environ.get("CLEARML_AUTH_TOKEN"):
+        env['CLEARML_AUTH_TOKEN'] = os.environ.get("CLEARML_AUTH_TOKEN")
+        os.system("echo 'export CLEARML_AUTH_TOKEN=\"{}\"' >> ~/.bashrc".format(
+            os.environ.get("CLEARML_AUTH_TOKEN").replace('$', '\\$')))
+        os.system("echo 'export CLEARML_AUTH_TOKEN=\"{}\"' >> ~/.profile".format(
+            os.environ.get("CLEARML_AUTH_TOKEN").replace('$', '\\$')))
+
+    if param.get("default_docker"):
         os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
             param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
+            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+
+    if vault_environment:
         for k, v in vault_environment.items():
             os.system("echo 'export {}=\"{}\"' >> ~/.profile".format(k, v))
             os.system("echo 'export {}=\"{}\"' >> ~/.bashrc".format(k, v))
             env[k] = str(v) if v else ""
-        env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
-        env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
+
     # set default folder for user
     if param.get("user_base_directory"):
         base_dir = param.get("user_base_directory")
