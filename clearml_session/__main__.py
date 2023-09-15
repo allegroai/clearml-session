@@ -755,7 +755,8 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
         child.terminate(force=True)
         child = None
     print('\n')
-    child.logfile = None
+    if child:
+        child.logfile = None
     return child, ssh_password
 
 
