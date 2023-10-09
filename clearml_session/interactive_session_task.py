@@ -852,6 +852,36 @@ def setup_user_env(param, task):
         except Exception:
             print('Could not write {} file'.format(git_config_file))
 
+    # check if we need to retrieve remote files for the session
+    if "session-files" in task.artifacts:
+        try:
+            target_dir = os.path.expanduser("~/session-files/")
+            cached_files_folder = task.artifacts["session-files"].get_local_copy(
+                extract_archive=True, force_download=True, raise_on_error=True)
+            # noinspection PyBroadException
+            try:
+                # first try a simple, move, if we fail, copy and delete
+                os.replace(cached_files_folder, target_dir)
+            except Exception:
+                import shutil
+                Path(target_dir).mkdir(parents=True, exist_ok=True)
+                if Path(cached_files_folder).is_dir():
+                    shutil.copytree(
+                        src=cached_files_folder,
+                        dst=target_dir,
+                        symlinks=True,
+                        ignore_dangling_symlinks=True,
+                        dirs_exist_ok=True)
+                    shutil.rmtree(cached_files_folder)
+                else:
+                    target_file = Path(cached_files_folder).name
+                    # we need to remove the taskid prefix from the cache folder
+                    target_file = (Path(target_dir) / (".".join(target_file.split(".")[1:]))).as_posix()
+                    shutil.copy(cached_files_folder, target_file, follow_symlinks=False)
+                    os.unlink(cached_files_folder)
+        except Exception as ex:
+            print("\nWARNING: Failed downloading remote session files! {}\n".format(ex))
+
     return env
 
 

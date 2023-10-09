@@ -139,7 +139,7 @@ VSCode server available at http://localhost:8898/
 
 Connection is up and running
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
-`i` (or "interactive") to connect to the SSH session
+`s` (or "shell") to connect to the SSH session
 `Ctrl-C` (or "quit") to abort (remote session remains active)
 or "Shutdown" to shut down remote interactive session
 ```
@@ -171,7 +171,7 @@ It will shut down the remote session, free the resource and close the CLI
 
 ``` console
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
-`i` (or "interactive") to connect to the SSH session
+`s` (or "shell") to connect to the SSH session
 `Ctrl-C` (or "quit") to abort (remote session remains active)
 or "Shutdown" to shut down remote interactive session
 
@@ -219,7 +219,7 @@ clearml-session --help
 ``` console
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]]
-                       [--shutdown [SHUTDOWN]] [--interactive]
+                       [--shutdown [SHUTDOWN]] [--shell]
                        [--debugging-session DEBUGGING_SESSION] [--queue QUEUE]
                        [--docker DOCKER] [--docker-args DOCKER_ARGS]
                        [--public-ip [true/false]]
@@ -228,6 +228,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--vscode-version VSCODE_VERSION]
                        [--vscode-extensions VSCODE_EXTENSIONS]
                        [--jupyter-lab [true/false]]
+                       [--upload-files UPLOAD_FILES]
                        [--git-credentials [true/false]]
                        [--user-folder USER_FOLDER]
                        [--packages [PACKAGES [PACKAGES ...]]]
@@ -239,9 +240,9 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--keepalive [true/false]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
-                       [--skip-docker-network] [--password PASSWORD]
-                       [--username USERNAME] [--force_dropbear [true/false]]
-                       [--verbose] [--yes]
+                       [--skip-docker-network [true/false]]
+                       [--password PASSWORD] [--username USERNAME]
+                       [--force_dropbear [true/false]] [--verbose] [--yes]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -251,9 +252,10 @@ optional arguments:
   --attach [ATTACH]     Attach to running interactive session (default:
                         previous session)
   --shutdown [SHUTDOWN], -S [SHUTDOWN]
-                        Shut down an active session (default: previous session)
-  --interactive, -I     open the SSH session directly, notice quiting the SSH session will 
-                        Not shutdown the remote session                        
+                        Shut down an active session (default: previous
+                        session)
+  --shell               Open the SSH shell session directly, notice quiting
+                        the SSH session will Not shutdown the remote session
   --debugging-session DEBUGGING_SESSION
                         Pass existing Task id (experiment), create a copy of
                         the experiment on a remote machine, and launch
@@ -290,6 +292,11 @@ optional arguments:
   --jupyter-lab [true/false]
                         Install Jupyter-Lab on interactive session (default:
                         true)
+  --upload-files UPLOAD_FILES
+                        Advanced: Upload local files/folders to the remote
+                        session. Example: `/my/local/data/` will upload the
+                        local folder and extract it into the container in
+                        ~/session-files/
   --git-credentials [true/false]
                         If true, local .git-credentials file is sent to the
                         interactive session. (default: false)
@@ -332,7 +339,7 @@ optional arguments:
   --queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]
                         Advanced: Only include queues with this specific tag
                         from the selection
-  --skip-docker-network
+  --skip-docker-network [true/false]
                         Advanced: If set, `--network host` is **not** passed
                         to docker (assumes k8s network ingestion) (default:
                         false)

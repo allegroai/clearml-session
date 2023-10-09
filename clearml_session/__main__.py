@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 from argparse import ArgumentParser, FileType
 from functools import reduce
 from getpass import getpass
@@ -200,6 +201,10 @@ def create_base_task(state, project_name=None, task_name=None):
         })
 
     task.set_system_tags([system_tag])
+
+    # if we need to upload data now is the time
+    if state.get("upload_files"):
+        task.upload_artifact(name="session-files", artifact_object=Path(state.get("upload_files")).expanduser())
 
     # only update the data at the end, so reload requests are smaller
     # noinspection PyProtectedMember
@@ -482,7 +487,8 @@ def load_state(state_file):
     # never reload --verbose and --yes states
     state.pop('verbose', None)
     state.pop('yes', None)
-    state.pop('interactive', None)
+    state.pop('shell', None)
+    state.pop('upload_files', None)
     return state
 
 
@@ -861,12 +867,12 @@ def monitor_ssh_tunnel(state, task):
             connect_message = (
                 '\nConnection is up and running\n'
                 'Enter \"r\" (or \"reconnect\") to reconnect the session (for example after suspend)\n'
-                '`i` (or "interactive") to connect to the SSH session\n'
+                '`s` (or "shell") to connect to the SSH session\n'
                 '`Ctrl-C` (or "quit") to abort (remote session remains active)\n'
                 'or \"Shutdown\" to shut down remote interactive session'
             )
             short_console_msg = \
-                "Enter \"r\" (\"reconnect\"), `i` (\"interactive\"), `Ctrl-C` (\"quit\") or \"Shutdown\""
+                "Enter \"r\" (\"reconnect\"), `s` (\"shell\"), `Ctrl-C` (\"quit\") or \"Shutdown\""
 
             if not ssh_process or not ssh_process.isalive():
                 ssh_process, ssh_password = start_ssh_tunnel(
@@ -903,9 +909,9 @@ def monitor_ssh_tunnel(state, task):
             connect_state['reconnect'] = False
 
             # if interactive start with SSH interactive
-            if state.pop('interactive', None):
+            if state.pop('shell', None):
                 interactive_ssh(ssh_process)
-                # if we are in --interactive, when we leave the session we should leave the process
+                # if we are in --shell, when we leave the session we should leave the process
                 break
 
             # wait for user input
@@ -928,7 +934,7 @@ def monitor_ssh_tunnel(state, task):
             if not user_input:
                 print(short_console_msg)
                 continue
-            elif user_input.lower() in ('i', 'interactive',):
+            elif user_input.lower() in ('s', 'shell',):
                 interactive_ssh(ssh_process)
                 continue
             elif user_input.lower() == 'shutdown':
@@ -972,8 +978,8 @@ def setup_parser(parser):
                         help='Attach to running interactive session (default: previous session)')
     parser.add_argument("--shutdown", "-S", default=None, const="", nargs="?",
                         help="Shut down an active session (default: previous session)")
-    parser.add_argument("--interactive", "-I", action='store_true', default=None,
-                        help="open the SSH session directly, notice quiting the SSH session "
+    parser.add_argument("--shell", action='store_true', default=None,
+                        help="Open the SSH shell session directly, notice quiting the SSH session "
                              "will Not shutdown the remote session")
     parser.add_argument('--debugging-session', type=str, default=None,
                         help='Pass existing Task id (experiment), create a copy of the experiment on a remote machine, '
@@ -1005,6 +1011,10 @@ def setup_parser(parser):
     parser.add_argument('--jupyter-lab', default=True, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Install Jupyter-Lab on interactive session (default: true)')
+    parser.add_argument('--upload-files', type=str, default=None,
+                        help='Advanced: Upload local files/folders to the remote session. '
+                             'Example: `/my/local/data/` will upload the local folder and extract it '
+                             'into the container in ~/session-files/')
     parser.add_argument('--git-credentials', default=False, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='If true, local .git-credentials file is sent to the interactive session. '
@@ -1042,7 +1052,8 @@ def setup_parser(parser):
                         help='Advanced: Excluded queues with this specific tag from the selection')
     parser.add_argument('--queue-include-tag', default=None, nargs='*',
                         help='Advanced: Only include queues with this specific tag from the selection')
-    parser.add_argument('--skip-docker-network', action='store_true', default=None,
+    parser.add_argument('--skip-docker-network',  default=None, nargs='?', const='true', metavar='true/false',
+                        type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Advanced: If set, `--network host` is **not** passed to docker '
                              '(assumes k8s network ingestion) (default: false)')
     parser.add_argument('--password', type=str, default=None,
@@ -1098,7 +1109,7 @@ def cli():
     if args.verbose:
         state['verbose'] = args.verbose
 
-    state['interactive'] = bool(args.interactive)
+    state['shell'] = bool(args.shell)
 
     client = APIClient()
 
@@ -1113,6 +1124,12 @@ def cli():
         task.mark_stopped()
         print("Session #{} shut down, goodbye!".format(task.id))
         return 0
+
+    # check if upload folder/files exist
+    if args.upload_files:
+        if not Path(args.upload_files).expanduser().exists():
+            print("Requested file/folder `{}` does not exist, exiting".format(args.upload_files))
+            return 1
 
     # get previous session, if it is running
     task = _get_previous_session(client, args, state, task_id=args.attach)
