@@ -379,6 +379,7 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
             )
 
         if user_folder:
+            # set user level configuration
             settings = Path(os.path.expanduser(os.path.join(user_folder, 'User/settings.json')))
             settings.parent.mkdir(parents=True, exist_ok=True)
             # noinspection PyBroadException
@@ -398,6 +399,27 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
                     "terminal.integrated.shell.linux": "/bin/bash" if Path("/bin/bash").is_file() else None,
                     "security.workspace.trust.untrustedFiles": "open",
                     "security.workspace.trust.startupPrompt": "never",
+                })
+                with open(settings.as_posix(), 'wt') as f:
+                    json.dump(base_json, f)
+            except Exception:
+                pass
+
+            # set machine level configuration
+            settings = Path(os.path.expanduser(os.path.join(user_folder, 'Machine/settings.json')))
+            settings.parent.mkdir(parents=True, exist_ok=True)
+            # noinspection PyBroadException
+            try:
+                with open(settings.as_posix(), 'rt') as f:
+                    base_json = json.load(f)
+            except Exception:
+                base_json = {}
+
+            # noinspection PyBroadException
+            try:
+                # "python.defaultInterpreterPath" is a machine level setting
+                base_json.update({
+                    "python.defaultInterpreterPath": sys.executable,
                 })
                 with open(settings.as_posix(), 'wt') as f:
                     json.dump(base_json, f)
