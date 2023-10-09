@@ -301,9 +301,13 @@ def delete_old_tasks(state, client, base_task_id):
         if state.get('verbose'):
             print('Removing {}/{} stale sessions'.format(i+1, len(previous_tasks)))
         try:
-            client.tasks.delete(task=t.id, force=True)
+            Task.get_task(task_id=t.id).delete(delete_artifacts_and_models=True, skip_models_used_by_other_tasks=True, raise_on_error=True)
         except Exception as ex:
             logging.getLogger().warning('{}\nFailed deleting old session {}'.format(ex, t.id))
+            try:
+                client.tasks.delete(task=t.id, force=True)
+            except Exception as ex:
+                logging.getLogger().warning('{}\nFailed deleting old session {}'.format(ex, t.id))
 
 
 def _get_running_tasks(client, prev_task_id):
