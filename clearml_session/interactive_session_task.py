@@ -461,6 +461,31 @@ def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0
         print("Warning: failed setting user base directory [{}] reverting to ~/".format(cwd))
         cwd = os.path.expanduser("~/")
 
+    # setup jupyter-lab default
+    # noinspection PyBroadException
+    try:
+        settings = Path(os.path.expanduser(
+            "~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/notification.jupyterlab-settings"))
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        # noinspection PyBroadException
+        try:
+            with open(settings.as_posix(), 'rt') as f:
+                base_json = json.load(f)
+        except Exception:
+            base_json = {}
+
+        # Notice we are Not using "python.defaultInterpreterPath": sys.executable,
+        # because for some reason it breaks the auto python interpreter setup
+        base_json.update({
+            "checkForUpdates": False,
+            "doNotDisturbMode": False,
+            "fetchNews": "false"
+        })
+        with open(settings.as_posix(), 'wt') as f:
+            json.dump(base_json, f)
+    except Exception as ex:
+        print("WARNING: Could not set default jupyter lab settings: {}".format(ex))
+
     print(
         "Running Jupyter Notebook Server on {} [{}] port {} at {}".format(hostname, hostnames, port, cwd)
     )
