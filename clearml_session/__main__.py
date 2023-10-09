@@ -158,7 +158,7 @@ def create_base_task(state, project_name=None, task_name=None):
         task_script['diff'] += '\n\n' + f.read()
 
     task_script['working_dir'] = '.'
-    task_script['entry_point'] = 'interactive_session.py'
+    task_script['entry_point'] = '.interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
         ["clearml>=1.1.5"] +
         (["jupyter", "jupyterlab", "traitlets"] if state.get('jupyter_lab') else []) +
