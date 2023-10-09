@@ -204,7 +204,13 @@ def create_base_task(state, project_name=None, task_name=None):
 
     # if we need to upload data now is the time
     if state.get("upload_files"):
-        task.upload_artifact(name="session-files", artifact_object=Path(state.get("upload_files")).expanduser())
+        print("Uploading local files: {}".format(state.get("upload_files")))
+        task.upload_artifact(
+            name="session-files",
+            artifact_object=Path(state.get("upload_files")).expanduser(),
+            wait_on_upload=True
+        )
+        print("Local files upload completed")
 
     # only update the data at the end, so reload requests are smaller
     # noinspection PyProtectedMember
