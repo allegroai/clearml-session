@@ -398,7 +398,8 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
                     "python.pythonPath": sys.executable,
                     "terminal.integrated.shell.linux": "/bin/bash" if Path("/bin/bash").is_file() else None,
                     "security.workspace.trust.untrustedFiles": "open",
-                    "security.workspace.trust.startupPrompt": "never",
+                    # "security.workspace.trust.startupPrompt": "never",
+                    "security.workspace.trust.enabled": False,
                 })
                 with open(settings.as_posix(), 'wt') as f:
                     json.dump(base_json, f)
