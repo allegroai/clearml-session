@@ -14,18 +14,7 @@ from time import time, sleep
 
 if sys.platform == 'win32':
     import msvcrt  # noqa
-    import wexpect as pexpect  # noqa
-
-    if sys.prefix != sys.base_prefix:
-        # running in venv
-        from clearml.utilities.version import Version
-        if Version(pexpect.__version__) < Version("4.0.1"):
-            # Wexpect issue https://github.com/raczben/wexpect/issues/26#issuecomment-1574339194
-            try:
-                import wexpect_venv as pexpect
-            except ImportError:
-                print("WARNING: wexpect_venv is required to connect via SSH when running in a Windows virtualenv."
-                      " Please install using 'pip install wexpect_venv' in this virtual environment")
+    import wexpect_venv as pexpect
 else:
     import select  # noqa
     import pexpect  # noqa
