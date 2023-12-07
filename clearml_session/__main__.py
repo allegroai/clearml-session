@@ -21,7 +21,7 @@ else:
 
 import psutil
 from clearml import Task
-from clearml.backend_api.session.client import APIClient
+from clearml.backend_api.session.client import APIClient, APIError
 from clearml.config import config_obj
 from clearml.backend_api import Session
 from .tcp_proxy import TcpProxy
@@ -322,13 +322,18 @@ def _get_running_tasks(client, prev_task_id):
     tasks_id_created = [(t.id, t.created, t.parent) for t in previous_tasks]
     if prev_task_id and prev_task_id not in (t[0] for t in tasks_id_created):
         # manually check the last task.id
-        prev_tasks = client.tasks.get_all(**{
-            'status': ['in_progress'],
-            'id': [prev_task_id],
-            'page_size': 10, 'page': 0,
-            'order_by': ['-last_update'],
-            'only_fields': ['id', 'created', 'parent']
-        })
+        try:
+            prev_tasks = client.tasks.get_all(**{
+                'status': ['in_progress'],
+                'id': [prev_task_id],
+                'page_size': 10, 'page': 0,
+                'order_by': ['-last_update'],
+                'only_fields': ['id', 'created', 'parent']
+            })
+        except APIError:
+            # we could not find previous task, nothing to worry about.
+            prev_tasks = None
+
         if prev_tasks:
             tasks_id_created += [(prev_tasks[0].id, prev_tasks[0].created, prev_tasks[0].parent)]
 
