@@ -162,7 +162,7 @@ def create_base_task(state, project_name=None, task_name=None):
     task_script['entry_point'] = '.interactive_session.py'
     task_script['requirements'] = {'pip': '\n'.join(
         ["clearml>=1.1.5"] +
-        (["jupyter", "jupyterlab", "traitlets"] if state.get('jupyter_lab') else []) +
+        (["jupyter", "jupyterlab", "jupyterlab_git", "traitlets"] if state.get('jupyter_lab') else []) +
         (['pylint'] if state.get('vscode_server') else []))}
 
     section, _, _ = _get_config_section_name()
@@ -243,7 +243,7 @@ def create_debugging_task(state, debug_task_id):
     task_state['script']['entry_point'] = '__interactive_session__.py'
     state['packages'] = \
         (state.get('packages') or []) + ["clearml"] + \
-        (["jupyter", "jupyterlab", "jupyterlab_git"] if state.get('jupyter_lab') else []) + \
+        (["jupyter", "jupyterlab", "jupyterlab_git", "traitlets"] if state.get('jupyter_lab') else []) + \
         (['pylint'] if state.get('vscode_server') else [])
     task.update_task(task_state)
     section, _, _ = _get_config_section_name()
