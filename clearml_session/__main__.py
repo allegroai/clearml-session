@@ -562,6 +562,7 @@ def clone_task(state, project_id=None):
     task_params["{}/vscode_version".format(section)] = state.get('vscode_version') or ''
     task_params["{}/vscode_extensions".format(section)] = state.get('vscode_extensions') or ''
     task_params["{}/force_dropbear".format(section)] = bool(state.get('force_dropbear'))
+    task_params["{}/tailscale".format(section)] = bool(state.get('tailscale'))
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
     docker = state.get('docker') or task.get_base_docker()
@@ -1087,6 +1088,9 @@ def setup_parser(parser):
                         action='store_true', default=False,
                         help='Automatic yes to prompts; assume \"yes\" as answer '
                              'to all prompts and run non-interactively',)
+    parser.add_argument('--tailscale',
+                        action='store_true', default=False,
+                        help='Use tailscale to network (host and client need tailscale access)',)
 
 
 def get_version():

@@ -1,4 +1,5 @@
 import base64
+import ipaddress
 import json
 import os
 import socket
@@ -910,6 +911,33 @@ def setup_user_env(param, task):
 
 
 def get_host_name(task, param):
+    hostname = []
+    hostnames = []
+    
+    
+    if task.get_parameter(name='interactive_session/tailscale'):
+        def get_tailscale_interfaces():
+            interfaces = psutil.net_if_addrs()
+            tailscale_address = None
+            for interface_name, interface_addresses in interfaces.items():
+                for address in interface_addresses:
+                    if "tailscale" in interface_name:
+                        print(address)
+                        try:
+                            ipaddress.IPv4Address(address.address)
+                        except ValueError:
+                            pass
+                        else:
+                            tailscale_address = address.address
+            return tailscale_address
+
+        tl_addr = get_tailscale_interfaces()
+        if tl_addr:
+            hostname = tl_addr
+            hostnames = tl_addr
+            task.set_parameter(name='properties/external_address', value=str(tl_addr))
+            return hostname, hostnames
+        
     # noinspection PyBroadException
     try:
         hostname = socket.gethostname()
@@ -1014,6 +1042,7 @@ def main():
         "public_ip": False,
         "ssh_ports": None,
         "force_dropbear": False,
+        "tailscale": False
     }
     task = init_task(param, default_ssh_fingerprint)
 
