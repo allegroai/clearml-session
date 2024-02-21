@@ -146,8 +146,8 @@ def _get_available_ports(list_initial_ports):
     return available_ports
 
 
-def create_base_task(state, project_name=None, task_name=None):
-    task = Task.create(project_name=project_name or 'DevOps',
+def create_base_task(state, project_name, task_name=None):
+    task = Task.create(project_name=project_name,
                        task_name=task_name or 'Interactive Session',
                        task_type=Task.TaskTypes.application)
     task_script = task.data.script.to_dict()
@@ -1057,7 +1057,7 @@ def setup_parser(parser):
     parser.add_argument('--base-task-id', type=str, default=None,
                         help='Advanced: Set the base task ID for the interactive session. '
                              '(default: previously used Task). Use `none` for the default interactive session')
-    parser.add_argument('--project', type=str, default=None,
+    parser.add_argument('--project', type=str, default="DevOps",
                         help='Advanced: Set the project name for the interactive session Task')
     parser.add_argument('--keepalive', default=False, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
@@ -1086,7 +1086,7 @@ def setup_parser(parser):
     parser.add_argument('--yes', '-y',
                         action='store_true', default=False,
                         help='Automatic yes to prompts; assume \"yes\" as answer '
-                             'to all prompts and run non-interactively',)
+                             'to all prompts and run non-interactively')
 
 
 def get_version():
@@ -1125,6 +1125,7 @@ def cli():
         state['verbose'] = args.verbose
 
     state['shell'] = bool(args.shell)
+    state['project'] = args.project
 
     client = APIClient()
 
