@@ -242,7 +242,7 @@ usage: clearml-session [-h] [--version] [--attach [ATTACH]]
                        [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
                        [--skip-docker-network [true/false]]
                        [--password PASSWORD] [--username USERNAME]
-                       [--force_dropbear [true/false]] [--verbose] [--yes]
+                       [--force_dropbear [true/false]] [--verbose] [--yes] [--tailscale]
 
 clearml-session - CLI for launching JupyterLab / VSCode on a remote machine
 
@@ -354,6 +354,7 @@ optional arguments:
                         e.g. the remote machine setup process log
   --yes, -y             Automatic yes to prompts; assume "yes" as answer to
                         all prompts and run non-interactively
+  --tailscale           Use tailscale to network (host and client need tailscale access)
 
 Notice! all arguments are stored as new defaults for the next session
 ```
