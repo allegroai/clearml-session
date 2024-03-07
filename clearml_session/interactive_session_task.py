@@ -1,18 +1,22 @@
 import base64
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
 from copy import deepcopy
 import getpass
-from tempfile import mkstemp, gettempdir
-from time import sleep
+from functools import partial
+from tempfile import mkstemp, gettempdir, mkdtemp
+from time import sleep, time
+from datetime import datetime
 
 import psutil
 import requests
 from clearml import Task, StorageManager
 from clearml.backend_api import Session
+from clearml.backend_api.services import tasks
 from pathlib2 import Path
 
 # noinspection SpellCheckingInspection
@@ -75,8 +79,10 @@ default_ssh_fingerprint = {
 config_section_name = 'interactive_session'
 config_object_section_ssh = 'SSH'
 config_object_section_bash_init = 'interactive_init_script'
-
-
+artifact_workspace_name = "workspace"
+sync_runtime_property = "workspace_sync_ts"
+sync_workspace_creating_id = "created_by_session"
+__poor_lock = []
 __allocated_ports = []
 
 
@@ -94,7 +100,10 @@ def init_task(param, a_default_ssh_fingerprint):
     Task.add_requirements('jupyterlab')
     Task.add_requirements('jupyterlab_git')
     task = Task.init(
-        project_name="DevOps", task_name="Allocate Jupyter Notebook Instance", task_type=Task.TaskTypes.service)
+        project_name="DevOps",
+        task_name="Allocate Jupyter Notebook Instance",
+        task_type=Task.TaskTypes.service
+    )
 
     # Add jupyter server base folder
     if Session.check_min_api_version('2.13'):
@@ -116,7 +125,7 @@ def init_task(param, a_default_ssh_fingerprint):
     else:
         task.connect(param, name=config_section_name)
 
-    # connect ssh finger print configuration (with fallback if section is missing)
+    # connect ssh fingerprint configuration (with fallback if section is missing)
     old_default_ssh_fingerprint = deepcopy(a_default_ssh_fingerprint)
     try:
         task.connect_configuration(configuration=a_default_ssh_fingerprint, name=config_object_section_ssh)
@@ -475,6 +484,13 @@ def start_jupyter_server(hostname, hostnames, param, task, env, bind_ip="127.0.0
     # if we are not running as root, make sure the sys executable is in the PATH
     env = dict(**env)
     env['PATH'] = '{}:{}'.format(Path(sys.executable).parent.as_posix(), env.get('PATH', ''))
+
+    try:
+        # set default shell to bash if not defined
+        if not env.get("SHELL") and shutil.which("bash"):
+            env['SHELL'] = shutil.which("bash")
+    except Exception as ex:
+        print("WARNING: failed finding default shell bash: {}".format(ex))
 
     # make sure we have the needed cwd
     # noinspection PyBroadException
@@ -999,6 +1015,169 @@ def run_user_init_script(task):
     os.environ['CLEARML_DOCKER_BASH_SCRIPT'] = str(init_script)
 
 
+def _sync_workspace_snapshot(task, param):
+    workspace_folder = param.get("store_workspace")
+    if not workspace_folder:
+        # nothing to do
+        return
+
+    print("Syncing workspace {}".format(workspace_folder))
+
+    workspace_folder = Path(os.path.expandvars(workspace_folder)).expanduser()
+    if not workspace_folder.is_dir():
+        print("WARNING: failed to create workspace snapshot from '{}' - "
+              "directory does not exist".format(workspace_folder))
+        return
+
+    # build hash of
+    files_desc = ""
+    for f in workspace_folder.rglob("*"):
+        fs = f.stat()
+        files_desc += "{}: {}[{}]\n".format(f.absolute(), fs.st_size, fs.st_mtime)
+    workspace_hash = hash(str(files_desc))
+    if param.get("workspace_hash") == workspace_hash:
+        print("Skipping workspace snapshot upload, "
+              "already uploaded no files changed since last sync {}".format(param.get(sync_runtime_property)))
+        return
+
+    print("Uploading workspace: {}".format(workspace_folder))
+
+    # force running status - so that we can upload the artifact
+    if task.status not in ("in_progress", ):
+        task.mark_started(force=True)
+
+    try:
+        # create a tar file of the folder
+        # put a consistent file name into a temp folder because the filename is part of
+        # the compressed artifact, and we want consistency in hash.
+        # After that we rename compressed file to temp file and
+        temp_folder = Path(mkdtemp(prefix='workspace_'))
+        local_gzip = (temp_folder / "workspace_snapshot").as_posix()
+        # notice it will add a ".tar.gz" suffix to the file
+        local_gzip = shutil.make_archive(
+            base_name=local_gzip, format="gztar", root_dir=workspace_folder.as_posix())
+        if not local_gzip:
+            print("ERROR: Failed compressing workspace [{}]".format(workspace_folder))
+            raise ValueError("Failed compressing workspace")
+
+        # list archived files for preview
+        files = list(workspace_folder.rglob("*"))
+        archive_preview = 'Archive content {}:\n'.format(workspace_folder)
+        for filename in sorted(files):
+            if filename.is_file():
+                relative_file_name = filename.relative_to(workspace_folder)
+                archive_preview += '{} - {:,} B\n'.format(relative_file_name, filename.stat().st_size)
+
+        # upload actual snapshot tgz
+        task.upload_artifact(
+            name=artifact_workspace_name,
+            artifact_object=Path(local_gzip),
+            delete_after_upload=True,
+            preview=archive_preview,
+            metadata={"timestamp": str(datetime.utcnow()), sync_workspace_creating_id: task.id},
+            wait_on_upload=True,
+            retries=3
+        )
+
+        try:
+            temp_folder.rmdir()
+        except Exception as ex:
+            print("Warning: Failed removing temp artifact folder: {}".format(ex))
+
+        print("Finalizing workspace sync")
+
+        # change artifact to input artifact
+        task.reload()
+        # find our artifact and update it
+        for a in task.data.execution.artifacts:
+            if a.key != artifact_workspace_name:
+                # nothing to do
+                continue
+            elif a.mode == tasks.ArtifactModeEnum.input:
+                # the old input entry - we are changing to output artifact
+                # the reason is that we want this entry to be deleted with this Task
+                # in contrast to Input entries that are Not deleted when deleting the Task
+                a.mode = tasks.ArtifactModeEnum.output
+                a.key = "old_" + str(a.key)
+            else:
+                # set the new entry as an input artifact
+                a.mode = tasks.ArtifactModeEnum.input
+
+        # noinspection PyProtectedMember
+        task._edit(execution=task.data.execution, force=True)
+        task.reload()
+
+        # update our timestamp & hash
+        param[sync_runtime_property] = time()
+        param["workspace_hash"] = workspace_hash
+        # noinspection PyProtectedMember
+        task._set_runtime_properties(runtime_properties={sync_runtime_property: time()})
+        print("[{}] Workspace '{}' snapshot synced".format(datetime.utcnow(), workspace_folder))
+    except Exception as ex:
+        print("ERROR: Failed syncing workspace [{}]: {}".format(workspace_folder, ex))
+    finally:
+        task.mark_stopped(force=True, status_message="workspace shutdown sync completed")
+
+
+def sync_workspace_snapshot(task, param):
+    __poor_lock.append(time())
+    if len(__poor_lock) != 1:
+        # someone is already in, we should leave
+        __poor_lock.pop(-1)
+
+    try:
+        return _sync_workspace_snapshot(task, param)
+    finally:
+        __poor_lock.pop(-1)
+
+
+def restore_workspace(task, param):
+    if not param.get("store_workspace"):
+        # check if we have something to restore, show warning
+        if artifact_workspace_name in task.artifacts:
+            print("WARNING: Found workspace snapshot, but ignoring since store_workspace is 'None'")
+        return
+
+    # add sync callback, timeout 5 min
+    print("Setting workspace snapshot sync callback on session end")
+    task.register_abort_callback(
+        partial(sync_workspace_snapshot, task, param),
+        callback_execution_timeout=60*5)
+
+    try:
+        workspace_folder = Path(os.path.expandvars(param.get("store_workspace"))).expanduser()
+        workspace_folder.mkdir(parents=True, exist_ok=True)
+    except Exception as ex:
+        print("ERROR: Could not create workspace folder {}: {}".format(
+            param.get("store_workspace"), ex))
+        return
+
+    if artifact_workspace_name not in task.artifacts:
+        print("No workspace snapshot was found, a new workspace snapshot [{}] "
+              "will be created when session ends".format(workspace_folder))
+        return
+
+    print("Fetching previous workspace snapshot")
+    artifact_zip_file = task.artifacts[artifact_workspace_name].get_local_copy(extract_archive=False)
+    print("Restoring workspace snapshot")
+    try:
+        shutil.unpack_archive(artifact_zip_file, extract_dir=workspace_folder.as_posix())
+    except Exception as ex:
+        print("ERROR: restoring workspace snapshot failed: {}".format(ex))
+        return
+
+    # remove the workspace from the cache
+    try:
+        os.unlink(artifact_zip_file)
+    except Exception as ex:
+        print("WARNING: temp workspace zip could not be removed: {}".format(ex))
+
+    print("Successfully restored workspace checkpoint to {}".format(workspace_folder))
+    # set time stamp
+    # noinspection PyProtectedMember
+    task._set_runtime_properties(runtime_properties={sync_runtime_property: time()})
+
+
 def main():
     param = {
         "user_base_directory": "~/",
@@ -1014,10 +1193,18 @@ def main():
         "public_ip": False,
         "ssh_ports": None,
         "force_dropbear": False,
+        "store_workspace": None,
     }
     task = init_task(param, default_ssh_fingerprint)
 
     run_user_init_script(task)
+
+    # restore workspace if exists
+    # notice, if "store_workspace" is not set we will Not restore the workspace
+    try:
+        restore_workspace(task, param)
+    except Exception as ex:
+        print("ERROR: Failed restoring workspace: {}".format(ex))
 
     hostname, hostnames = get_host_name(task, param)
 
@@ -1029,7 +1216,11 @@ def main():
 
     start_jupyter_server(hostname, hostnames, param, task, env)
 
-    print('We are done')
+    print('We are done - sync workspace if needed')
+
+    sync_workspace_snapshot(task, param)
+
+    print('Goodbye')
 
 
 if __name__ == '__main__':

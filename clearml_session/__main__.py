@@ -35,7 +35,7 @@ except Exception:
     pass
 
 system_tag = 'interactive'
-default_docker_image = 'nvidia/cuda:10.1-runtime-ubuntu18.04'
+default_docker_image = 'nvidia/cuda:11.6.2-runtime-ubuntu20.04'
 
 
 class NonInteractiveError(Exception):
@@ -146,10 +146,21 @@ def _get_available_ports(list_initial_ports):
     return available_ports
 
 
-def create_base_task(state, project_name=None, task_name=None):
-    task = Task.create(project_name=project_name or 'DevOps',
-                       task_name=task_name or 'Interactive Session',
-                       task_type=Task.TaskTypes.application)
+def create_base_task(state, project_name=None, task_name=None, continue_task_id=None, project_id=None):
+    if continue_task_id:
+        task = Task.clone(
+            source_task=continue_task_id,
+            project=project_id,
+            parent=continue_task_id,
+            name=task_name or 'Interactive Session'
+        )
+    else:
+        task = Task.create(
+            project_name=project_name or 'DevOps',
+            task_name=task_name or 'Interactive Session',
+            task_type=Task.TaskTypes.application
+        )
+
     task_script = task.data.script.to_dict()
     base_script_file = os.path.abspath(os.path.join(__file__, '..', 'tcp_proxy.py'))
     with open(base_script_file, 'rt') as f:
@@ -218,13 +229,13 @@ def create_base_task(state, project_name=None, task_name=None):
     return task
 
 
-def create_debugging_task(state, debug_task_id):
+def create_debugging_task(state, debug_task_id, task_name=None, task_project_id=None):
     debug_task = Task.get_task(task_id=debug_task_id)
     # if there is no git repository, we cannot debug it
     if not debug_task.data.script.repository:
         raise ValueError("Debugging task has no git repository, single script debugging is not supported.")
 
-    task = Task.clone(source_task=debug_task_id, parent=debug_task_id)
+    task = Task.clone(source_task=debug_task_id, parent=debug_task_id, name=task_name, project=task_project_id)
 
     task_state = task.export_task()
 
@@ -285,23 +296,87 @@ def create_debugging_task(state, debug_task_id):
     return task
 
 
-def delete_old_tasks(state, client, base_task_id):
+def find_prev_session(state, client):
+    # nothing to do
+    if not state.get("store_workspace"):
+        return
+
+    current_user_id = _get_user_id(client)
+    previous_tasks = client.tasks.get_all(**{
+        'status': ['failed', 'stopped', 'completed'],
+        'system_tags': [system_tag],
+        'page_size': 100, 'page': 0,
+        'order_by': ['-last_update'],
+        'user': [current_user_id],
+        'only_fields': ['id']
+    })
+
+    continue_session_id = state.get("continue_session")
+    # if we do not find something, we ignore it
+    state["continue_session"] = None
+
+    for i, t in enumerate(previous_tasks):
+        try:
+            task = Task.get_task(task_id=t.id)
+            if state.get("store_workspace") and task.artifacts:
+                if continue_session_id and continue_session_id == t.id:
+                    print("Restoring workspace from previous session id={} [{}]".format(
+                        continue_session_id, task.data.last_update))
+                    state["continue_session"] = t.id
+                    break
+                elif not continue_session_id and i == 0:
+                    if not state.get("yes"):
+                        choice = input("Restore workspace from session id={} '{}' @ {} [Y]/n? ".format(
+                            t.id, task.name, str(task.data.last_update).split(".")[0]))
+                        if str(choice).strip().lower() in ('n', 'no'):
+                            continue
+
+                    print("Restoring workspace from previous session id={}".format(t.id))
+                    state["continue_session"] = t.id
+                    break
+        except Exception as ex:
+            logging.getLogger().warning('Failed retrieving old session {}:'.format(t.id, ex))
+
+
+def delete_old_tasks(state, client, base_task_id, skip_latest_session=True):
+    if state["disable_session_cleanup"]:
+        return
+
     print('Removing stale interactive sessions')
+
     current_user_id = _get_user_id(client)
     previous_tasks = client.tasks.get_all(**{
         'status': ['failed', 'stopped', 'completed'],
         'parent': base_task_id or None,
         'system_tags': None if base_task_id else [system_tag],
         'page_size': 100, 'page': 0,
+        'order_by': ['-last_update'],
         'user': [current_user_id],
         'only_fields': ['id']
     })
 
     for i, t in enumerate(previous_tasks):
+        # skip the selected Task which has our new workspace
+        if state.get("continue_session") == t.id:
+            continue
+
         if state.get('verbose'):
             print('Removing {}/{} stale sessions'.format(i+1, len(previous_tasks)))
+        # no need to worry about workspace snapshots,
+        # because they are input artifacts and thus will Not actually be deleted
+        # we will delete them manually if the Task has its own workspace snapshot
         try:
-            Task.get_task(task_id=t.id).delete(delete_artifacts_and_models=True, skip_models_used_by_other_tasks=True, raise_on_error=True)
+            task = Task.get_task(task_id=t.id)
+            # if we have any artifacts on this session Task
+            if skip_latest_session and task.artifacts and i == 0:
+                # do not delete this workspace yet (only next time)
+                continue
+
+            task.delete(
+                delete_artifacts_and_models=True,
+                skip_models_used_by_other_tasks=True,
+                raise_on_error=True
+            )
         except Exception as ex:
             logging.getLogger().warning('{}\nFailed deleting old session {}'.format(ex, t.id))
             try:
@@ -317,7 +392,8 @@ def _get_running_tasks(client, prev_task_id):
         'system_tags': [system_tag],
         'page_size': 10, 'page': 0,
         'order_by': ['-last_update'],
-        'user': [current_user_id], 'only_fields': ['id', 'created', 'parent']
+        'user': [current_user_id],
+        'only_fields': ['id', 'created', 'parent']
     })
     tasks_id_created = [(t.id, t.created, t.parent) for t in previous_tasks]
     if prev_task_id and prev_task_id not in (t[0] for t in tasks_id_created):
@@ -363,13 +439,9 @@ def _b64_encode_file(file):
 def get_project_id(project_name):
     project_id = None
     if project_name:
-        projects = Task.get_projects()
-        project_id = [p for p in projects if p.name == project_name]
-        if project_id:
-            project_id = project_id[0]
-        else:
+        project_id = Task.get_project_id(project_name=project_name)
+        if not project_id:
             logging.getLogger().warning("could not locate project by the named '{}'".format(project_name))
-            project_id = None
     return project_id
 
 
@@ -465,16 +537,18 @@ def get_user_inputs(args, parser, state, client):
     print("\nInteractive session config:\n{}\n".format(
         json.dumps({k: v for k, v in state.items() if not str(k).startswith('__')}, indent=4, sort_keys=True)))
 
+    return state
+
+
+def ask_launch(args):
     # no need to ask just return the value
-    if assume_yes:
-        return state
+    if args.yes:
+        return
 
     choice = input('Launch interactive session [Y]/n? ')
     if str(choice).strip().lower() in ('n', 'no'):
         print('User aborted')
         exit(0)
-
-    return state
 
 
 def save_state(state, state_file):
@@ -504,24 +578,46 @@ def load_state(state_file):
     state.pop('yes', None)
     state.pop('shell', None)
     state.pop('upload_files', None)
+    state.pop('continue_session', None)
     return state
 
 
 def clone_task(state, project_id=None):
     new_task = False
+    project_id = \
+        project_id or (get_project_id(project_name=state.get('project')) if state.get('project') else None)
+
     if state.get('debugging_session'):
         print('Starting new debugging session to {}'.format(state.get('debugging_session')))
-        task = create_debugging_task(state, state.get('debugging_session'))
+        task = create_debugging_task(
+            state,
+            state.get('debugging_session'),
+            task_name=state.get('session_name'),
+            task_project_id=project_id
+        )
     elif state.get('base_task_id'):
-        print('Cloning base session {}'.format(state['base_task_id']))
-        project_id = \
-            project_id or (get_project_id(project_name=state.get('project')) if state.get('project') else None)
-        task = Task.clone(source_task=state['base_task_id'], project=project_id, parent=state['base_task_id'])
+        base_task_id = state.get('base_task_id')
+        print('Cloning base session {}'.format(base_task_id))
+        task = Task.clone(
+            source_task=base_task_id,
+            project=project_id,
+            parent=base_task_id,
+            name=state.get('session_name')
+        )
         task.set_system_tags([system_tag])
     else:
         print('Creating new session')
-        task = create_base_task(state, project_name=state.get('project'))
+        task = create_base_task(
+            state,
+            project_name=state.get('project'),
+            task_name=state.get('session_name'),
+            continue_task_id=state.get('continue_session'),
+            project_id=project_id
+        )
         new_task = True
+
+    if state.get("session_tags"):
+        task.set_tags(state.get("session_tags"))
 
     print('Configuring new session')
     runtime_prop_support = Session.check_min_api_version("2.13")
@@ -562,6 +658,7 @@ def clone_task(state, project_id=None):
     task_params["{}/vscode_version".format(section)] = state.get('vscode_version') or ''
     task_params["{}/vscode_extensions".format(section)] = state.get('vscode_extensions') or ''
     task_params["{}/force_dropbear".format(section)] = bool(state.get('force_dropbear'))
+    task_params["{}/store_workspace".format(section)] = state.get('store_workspace')
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
     docker = state.get('docker') or task.get_base_docker()
@@ -624,6 +721,10 @@ def clone_task(state, project_id=None):
         task.update_task({'script': {'requirements': requirements}})
     task.set_parameters(task_params)
     print('New session created [id={}]'.format(task.id))
+    if state.get("continue_session") and state.get("store_workspace"):
+        print('Restoring remote workspace from [{}] into {}'.format(
+            state.get("continue_session"), state.get("store_workspace")))
+
     return task
 
 
@@ -819,6 +920,12 @@ def monitor_ssh_tunnel(state, task):
         local_vscode_port_ = local_vscode_port
 
     default_section = _get_config_section_name()[0]
+
+    workspace_header_msg = ''
+    if task.get_parameter("{}/store_workspace".format(default_section)):
+        workspace_header_msg = "Workspace at '{}' will be automatically synchronized when shutting down".format(
+            task.get_parameter("{}/store_workspace".format(default_section)))
+
     local_remote_pair_list = []
     shutdown = False
     try:
@@ -914,6 +1021,9 @@ def monitor_ssh_tunnel(state, task):
                             local_vscode_port=local_vscode_port)
                         if state.get('user_folder'):
                             msg += "?folder={}".format(state.get('user_folder'))
+                    if workspace_header_msg:
+                        msg += "\n\n{}".format(workspace_header_msg)
+
                     print(msg)
                     print(connect_message)
                 else:
@@ -986,6 +1096,114 @@ def monitor_ssh_tunnel(state, task):
         pass
 
 
+class CliCommands:
+    state = dict()
+
+    @classmethod
+    def list_sessions(cls, args):
+        client = APIClient()
+        filters = {
+            'status': ['in_progress'],
+            'system_tags': [system_tag],
+            'page_size': 500, 'page': 0,
+            'order_by': ['-last_update'],
+            'only_fields': ['id', 'created', 'name', 'project', 'tags']
+        }
+        if args.session_tags:
+            filters['tags'] = args.session_tags
+        if args.project:
+            filters['project'] = [Task.get_project_id(project_name=args.project)]
+        if not args.all_users:
+            current_user_id = _get_user_id(client)
+            filters['user'] = [current_user_id]
+
+        msg = "Listing active sessions tags=[{}] project=[{}] all_users={}".format(
+            args.session_tags or "*", args.project or "*", args.all_users)
+        print(msg + "\n" + ("-" * len(msg)))
+
+        session_tasks = client.tasks.get_all(**filters)
+        if not session_tasks:
+            print("No interactive sessions found")
+            return 0
+
+        project_names = dict()
+        for i, t in enumerate(session_tasks):
+            # noinspection PyProtectedMember
+            pname = project_names.get(t.project, Task._get_project_name(t.project)) if t.project else ""
+            print("{}] id={} name='{}' tags={} project='{}'".format(i, t.id, t.name, t.tags, pname))
+
+        return 0
+
+    @classmethod
+    def session_info(cls, args):
+        print("Fetching interactive session details:")
+        client = APIClient()
+        try:
+            tasks = client.tasks.get_all(**{
+                'id': [args.id],
+                'page_size': 10, 'page': 0,
+                'order_by': ['-last_update'],
+                'only_fields': ['id', 'created', 'parent', 'status', 'project', 'tags', 'system_tags', 'type']
+            })
+        except APIError:
+            tasks = None
+
+        if tasks:
+            tid = tasks[0].id
+            t = Task.get_task(task_id=tid)
+            print(
+                "  status={}\n".format(t.data.status) +
+                "  id={}\n".format(t.id) +
+                "  name={}\n".format(t.name) +
+                "  project={}\n".format(t.get_project_name()) +
+                "  tags={}\n".format(t.get_tags()) +
+                "  log={}\n".format(t.get_output_log_web_page())
+            )
+            return 0
+        else:
+            print("ERROR: Interactive session id={} not found".format(args.id))
+            return 1
+
+    @classmethod
+    def shutdown_session(cls, args):
+        task_id = args.id or args.shutdown
+        print("Shutting down session id={}".format(task_id))
+        client = APIClient()
+        try:
+            tasks = client.tasks.get_all(**{
+                'id': [args.id],
+                'page_size': 10, 'page': 0,
+                'order_by': ['-last_update'],
+                'only_fields': ['id', 'created', 'parent', 'status', 'project', 'tags', 'system_tags', 'type']
+            })
+        except APIError:
+            tasks = None
+
+        if not tasks:
+            print("ERROR: Interactive session id={} not found".format(args.id))
+            return 1
+
+        try:
+            task = _get_previous_session(
+                client, args, cls.state,
+                task_id=task_id,
+                verb="Shutting down",
+                question_verb="Shutdown",
+                ask_for_explicit_id=True
+            )
+        except ValueError:
+            print("Warning: session not running - skipping shutdown")
+            return 0
+
+        if not task:
+            print("Warning: skipping session shutdown")
+            return 0
+
+        task.mark_stopped()
+        print("Session #{} shutdown".format(task.id))
+        return 0
+
+
 def setup_parser(parser):
     parser.add_argument('--version', action='store_true', default=None,
                         help='Display the clearml-session utility version')
@@ -1030,6 +1248,15 @@ def setup_parser(parser):
                         help='Advanced: Upload local files/folders to the remote session. '
                              'Example: `/my/local/data/` will upload the local folder and extract it '
                              'into the container in ~/session-files/')
+    parser.add_argument('--continue-session', type=str, default=None,
+                        help='Continue previous session (ID provided) '
+                             'restoring your workspace (see --store-workspace)')
+    parser.add_argument('--store-workspace', type=str, default=None,
+                        help='Upload/Restore remote workspace folder. '
+                             'Example: `~/workspace/` will automatically restore/store the *containers* folder '
+                             'and extract it into next the session. '
+                             'Use with --continue-session to continue your '
+                             'previous work from your exact container state')
     parser.add_argument('--git-credentials', default=False, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='If true, local .git-credentials file is sent to the interactive session. '
@@ -1059,6 +1286,13 @@ def setup_parser(parser):
                              '(default: previously used Task). Use `none` for the default interactive session')
     parser.add_argument('--project', type=str, default=None,
                         help='Advanced: Set the project name for the interactive session Task')
+    parser.add_argument('--session-name', type=str, default=None,
+                        help='Advanced: Set the name of the interactive session Task')
+    parser.add_argument('--session-tags', type=str, nargs='*', default=None,
+                        help='Advanced: Add tags to the interactive session for increased visibility')
+    parser.add_argument('--disable-session-cleanup', default=False, nargs='?', const='true', metavar='true/false',
+                        type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
+                        help='Advanced: If set, previous interactive sessions are not deleted')
     parser.add_argument('--keepalive', default=False, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Advanced: If set, enables the transparent proxy always keeping the sockets alive. '
@@ -1067,7 +1301,7 @@ def setup_parser(parser):
                         help='Advanced: Excluded queues with this specific tag from the selection')
     parser.add_argument('--queue-include-tag', default=None, nargs='*',
                         help='Advanced: Only include queues with this specific tag from the selection')
-    parser.add_argument('--skip-docker-network',  default=None, nargs='?', const='true', metavar='true/false',
+    parser.add_argument('--skip-docker-network', default=None, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Advanced: If set, `--network host` is **not** passed to docker '
                              '(assumes k8s network ingestion) (default: false)')
@@ -1077,7 +1311,7 @@ def setup_parser(parser):
     parser.add_argument('--username', type=str, default=None,
                         help='Advanced: Select ssh username for the interactive session '
                              '(default: `root` or previously used one)')
-    parser.add_argument('--force_dropbear', default=None, nargs='?', const='true', metavar='true/false',
+    parser.add_argument('--force-dropbear', default=None, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Force using `dropbear` instead of SSHd')
     parser.add_argument('--verbose', action='store_true', default=None,
@@ -1088,6 +1322,26 @@ def setup_parser(parser):
                         help='Automatic yes to prompts; assume \"yes\" as answer '
                              'to all prompts and run non-interactively',)
 
+    subparsers = parser.add_subparsers(help='ClearML session control commands', dest='command')
+
+    parser_list = subparsers.add_parser('list', help='List running Sessions')
+    parser_list.add_argument(
+        '--all_users', '-a',
+        action='store_true', default=False,
+        help='Return all running sessions (from all users). '
+             'Default: return Only current users sessions',)
+    parser_list.set_defaults(func=CliCommands.list_sessions)
+
+    parser_info = subparsers.add_parser('info', help='Detailed information on specific session')
+    parser_info.add_argument(
+        '--id', type=str, default=None, help='Interactive session information details')
+    parser_info.set_defaults(func=CliCommands.session_info)
+
+    parser_shutdown = subparsers.add_parser('shutdown', help='Shutdown specific session')
+    parser_shutdown.add_argument(
+        '--id', type=str, default=None, help='Session ID to be shutdown')
+    parser_shutdown.set_defaults(func=CliCommands.shutdown_session)
+
 
 def get_version():
     from .version import __version__
@@ -1095,11 +1349,11 @@ def get_version():
 
 
 def cli():
-    title = 'clearml-session - CLI for launching JupyterLab / VSCode on a remote machine'
+    title = 'clearml-session - CLI for launching JupyterLab / VSCode / SSH on a remote machine'
     print(title)
     parser = ArgumentParser(
         prog='clearml-session', description=title,
-        epilog='Notice! all arguments are stored as new defaults for the next session')
+        epilog='Notice! all arguments are stored as new defaults for the next execution')
     setup_parser(parser)
 
     # get the args
@@ -1108,14 +1362,6 @@ def cli():
     if args.version:
         print('Version {}'.format(get_version()))
         exit(0)
-
-    # check ssh
-    if not _check_ssh_executable():
-        raise ValueError("Could not locate SSH executable")
-
-    # check clearml.conf
-    if not _check_configuration():
-        raise ValueError("ClearML configuration not found. Please run `clearml-init`")
 
     # load previous state
     state_file = os.path.abspath(os.path.expandvars(os.path.expanduser(args.config_file)))
@@ -1126,8 +1372,26 @@ def cli():
 
     state['shell'] = bool(args.shell)
 
+    if args.command:
+        if args.command in ("info", "shutdown") and not args.id:
+            print("Notice! session info requires ID but it was not provided")
+            return
+
+        CliCommands.state = state
+        args.func(args)
+        return
+
+    # check ssh
+    if not _check_ssh_executable():
+        raise ValueError("Could not locate SSH executable")
+
+    # check clearml.conf
+    if not _check_configuration():
+        raise ValueError("ClearML configuration not found. Please run `clearml-init`")
+
     client = APIClient()
 
+    # to be deprecated
     if args.shutdown is not None:
         task = _get_previous_session(
             client, args, state, task_id=args.shutdown, verb="Shutting down",
@@ -1168,6 +1432,12 @@ def cli():
 
         # save state
         save_state(state, state_file)
+
+        # find previous workspace is needed
+        find_prev_session(state, client)
+
+        # ask user final approval
+        ask_launch(args)
 
         # remove old Tasks created by us.
         delete_old_tasks(state, client, state.get('base_task_id'))
