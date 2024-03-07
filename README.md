@@ -80,7 +80,7 @@ See below for full CLI options.
 
 ## 📖 Tutorials
 
-### Getting started
+### 👉 Getting started
 
 Requirements `clearml` python package installed and configured (see detailed [instructions](https://clear.ml/docs/latest/docs/getting_started/ds/ds_first_steps))
 ``` bash
@@ -133,7 +133,7 @@ Open your terminal, clone your code & start working :)
 > you can directly drop into a shell by adding `--shell` to the command line
 
 
-### Leaving a session and reconnecting to it
+### 📞 Leaving a session and reconnecting to it
 
 On the `clearml-session` CLI terminal, enter 'quit' or press `Ctrl-C`
 It will close the CLI but preserve the remote session (i.e. remote session will remain running)
@@ -150,7 +150,7 @@ Checking previous session
 Connect to active session id=3d38e738c5ff458a9ec465e77e19da23 [Y]/n?
 ```
 
-### Shutting down a remote session
+### ⏻ Shutting down a remote session
 
 On the `clearml-session` CLI terminal, enter 'shutdown' (case-insensitive)
 It will shut down the remote session, free the resource and close the CLI
@@ -174,7 +174,7 @@ You can also use the CLI to shut down a specific clearml interactive session
 clearml-session shutdown --id <session_id>
 ```
 
-### Connecting to a running interactive session from a different machine
+### 🔗 Connecting to a running interactive session from a different machine
 
 Continue working on an interactive session from **any** machine.
 In the `clearml` web UI, go to DevOps project, and find your interactive session.
@@ -190,7 +190,7 @@ Click on the JupyterLab/VSCode link, or connect directly to the SSH session
 > and connect to the same remote container together with `--attach`
 
 
-### Store and synchronize interactive session workspace
+### 📂 Store and synchronize interactive session workspace
 
 Specify the remote workspace root-folder by adding `--store-workspace ~/workspace` to the command line.
 In the remote session container, put all your code / data under the `~/workspace` directory.
@@ -225,7 +225,7 @@ To continue a **specific** session ID and restore its workspace
 clearml-session --continue-session <session_id> --store-workspace ~/workspace --docker python:3.10-bullseye
 ```
 
-### Upload local files to remote session
+### 📤 Upload local files to remote session
 
 If you need to upload files from your local machine into the remote session, 
 specify the file or directory with `--upload-files /mnt/data/stuff`. 
@@ -240,7 +240,7 @@ clearml-session --upload-files /mnt/data/stuff
 ```
 
 
-### Debug a previously executed experiment
+### 🔧 Debug a previously executed experiment
 
 If you have a previously executed experiment (Task) on the clearml platform,
 you can create an exact copy of the experiment (Task) and debug it on the remote interactive session.
@@ -297,7 +297,7 @@ and use `clearml-session` to gain access to a dedicated on-prem machine with the
 
 Learn more about how to utilize your office workstations and on-prem machines [here](https://clear.ml/docs/latest/docs/clearml_agent)
 
-## CLI options
+## ⌨️ CLI options
 
 ```bash
 clearml-session --help
