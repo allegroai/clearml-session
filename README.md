@@ -4,7 +4,7 @@
 
 ## **`clearml-session` </br> CLI for launching JupyterLab / VSCode / SSH on a remote machine**
 
-## 🔥 NEW in version `0.13` [Workspace Syncing](#store-and-synchronize-interactive-session-workspace) 🚀 
+## 🔥 NEW in version `0.13` [Workspace Syncing](#-store-and-synchronize-interactive-session-workspace) 🚀 
 
 
 [![GitHub license](https://img.shields.io/github/license/allegroai/clearml-session.svg)](https://img.shields.io/github/license/allegroai/clearml-session.svg)
@@ -30,7 +30,7 @@ interactive usage (i.e., development)
 - ClearML will start monitoring machine performance, allowing DevOps to detect stale instances and spin them down
 - NEW 🔥 Kubernetes support, develop directly inside your pods! No kubectl required! 
 Read more about `clearml-agent` and interactive sessions [here](https://clear.ml/docs/latest/docs/clearml_agent/#kubernetes)   
-- NEW 🎉 Automatically store & sync your [interactive session workspace](#store-and-synchronize-interactive-session-workspace). 
+- NEW 🎉 Automatically store & sync your [interactive session workspace](#-store-and-synchronize-interactive-session-workspace). 
 `clearml-session` will automatically create a snapshot of your entire workspace when shutting it down, 
 and later restore into a new session on a different remote machine
 
@@ -44,7 +44,7 @@ and later restore into a new session on a different remote machine
 4. Scale-out development to multiple clouds, assign development machines on AWS/GCP/Azure in a seamless way
 
 ## Prerequisites:
-* **An SSH client installed on your machine** - To verify open your terminal and execute `ssh`, if you did not receive an error, we are good to go.
+* **An SSH client installed on your machine** - To verify, open your terminal and execute `ssh`. If you did not receive an error, we are good to go.
 * At least one `clearml-agent` running on a remote host. See installation [details](https://github.com/allegroai/clearml-agent).
 
 Supported OS: MacOS, Windows, Linux
@@ -62,17 +62,17 @@ connection without breaking any network sockets!
 
 This means that if the network connection is unstable, you can refresh
 the base SSH network tunnel, without breaking JupyterLab/VSCode-server or your own SSH connection
-(e.h. debugging over SSH with PyCharm)  
+(e.g. debugging over SSH with PyCharm)  
 
 ---
 
 ## ⚡ How to use: Interactive Session
 
 
-1. run `clearml-session`
-2. select the requested queue (resource)
-3. wait until a machine is up and ready
-4. click on the link to the remote JupyterLab/VSCode OR connect with the provided SSH details
+1. Run `clearml-session`
+2. Select the requested queue (resource)
+3. Wait until a machine is up and ready
+4. Click on the link to the remote JupyterLab/VSCode OR connect with the provided SSH details
 
 **Notice! You can also**: Select a **docker image** to execute in, install required **python packages**, run **bash script**,
 pass **git credentials**, etc.
@@ -88,7 +88,7 @@ pip install clearml-session
 clearml-session --docker nvcr.io/nvidia/pytorch:20.11-py3 --git-credentials
 ```
 
-Wait for the machine to spin up:
+Wait for the machine to spin up.
 Expected CLI output would look something like:
 ``` console
 Creating new session
@@ -120,9 +120,9 @@ Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
 or "Shutdown" to shut down remote interactive session
 ```
 
-Click on the **Jupyter Lab** link (http://localhost:8878/?token=xyz)
-Or **VScode** (running inside your remote container) (http://localhost:8898/)
-Or drop into **SSH** shell by typying `shell`
+Click on the **Jupyter Lab** link (http://localhost:8878/?token=xyz),
+or **VScode** (running inside your remote container) (http://localhost:8898/),
+or drop into **SSH** shell by typing `shell`.
 
 Open your terminal, clone your code & start working :)
 
@@ -143,7 +143,7 @@ When you want to reconnect to it, execute:
 clearml-session
 ```
 
-Then press "Y" (or enter) to reconnect to the already running session
+Then press "Y" (or enter) to reconnect to the already running session:
 ``` console
 clearml-session - launch interactive session
 Checking previous session
@@ -152,8 +152,8 @@ Connect to active session id=3d38e738c5ff458a9ec465e77e19da23 [Y]/n?
 
 ### ⏻ Shutting down a remote session
 
-On the `clearml-session` CLI terminal, enter 'shutdown' (case-insensitive)
-It will shut down the remote session, free the resource and close the CLI
+On the `clearml-session` CLI terminal, enter 'shutdown' (case-insensitive).
+It will shut down the remote session, free the resource and close the CLI:
 
 ```console
 Enter "r" (or "reconnect") to reconnect the session (for example after suspend)
@@ -168,7 +168,7 @@ Remote session shutdown
 Goodbye
 ```
 
-You can also use the CLI to shut down a specific clearml interactive session
+You can also use the CLI to shut down a specific clearml interactive session:
 
 ```bash
 clearml-session shutdown --id <session_id>
@@ -177,14 +177,14 @@ clearml-session shutdown --id <session_id>
 ### 🔗 Connecting to a running interactive session from a different machine
 
 Continue working on an interactive session from **any** machine.
-In the `clearml` web UI, go to DevOps project, and find your interactive session.
+In the `clearml` web UI, go to the DevOps project, and find your interactive session.
 Click on the ID button next to the Task name, and copy the unique ID.
 
 ```bash
 clearml-session --attach <session_id>
 ```
 
-Click on the JupyterLab/VSCode link, or connect directly to the SSH session
+Click on the JupyterLab/VSCode link, or connect directly to the SSH session.
 
 > ✨ **TIP**: You can work & debug your colleagues code and workspace by sharing the `session id` 
 > and connect to the same remote container together with `--attach`
@@ -194,15 +194,15 @@ Click on the JupyterLab/VSCode link, or connect directly to the SSH session
 
 Specify the remote workspace root-folder by adding `--store-workspace ~/workspace` to the command line.
 In the remote session container, put all your code / data under the `~/workspace` directory.
-When your session is shut down, the workspace folder will be automatically package and stored on the clearml file server.
-In your next `clearml-session` execution specify again `--store-workspace ~/workspace` and clearml-session
+When your session is shut down, the workspace folder will be automatically packaged and stored on the clearml file server.
+In your next `clearml-session` execution, specify again `--store-workspace ~/workspace` and clearml-session
 will grab the previous workspace snapshot and restore it into the new remote container in `~/workspace`.
 
 ```bash
 clearml-session --store-workspace ~/workspace --docker python:3.10-bullseye
 ```
 
-To continue the last aborted session and restore the workspace
+To continue the last aborted session and restore the workspace:
 
 ```bash
 clearml-session --store-workspace ~/workspace --docker python:3.10-bullseye
@@ -219,7 +219,7 @@ Restore workspace from session id=01bf86f038314434878b2413343ba746 'interactive_
 Restoring workspace from previous session id=01bf86f038314434878b2413343ba746
 ```
 
-To continue a **specific** session ID and restore its workspace
+To continue a **specific** session ID and restore its workspace:
 
 ```bash
 clearml-session --continue-session <session_id> --store-workspace ~/workspace --docker python:3.10-bullseye
@@ -232,7 +232,7 @@ specify the file or directory with `--upload-files /mnt/data/stuff`.
 The entire content of the directory / file will be copied into your remote `clearml-session` 
 container under the `~/session-files/` directory. 
 
-Can be used in conjunction with `--store-session` to easily move workloads between local development machine
+Can be used in conjunction with `--store-workspace` to easily move workloads between local development machines
 and remote machines with 100% persistent workspace synchronization.
 
 ```bash
@@ -254,7 +254,7 @@ Click on the ID button next to the Task name, and copy the unique ID, then execu
 clearml-session --debugging-session <experiment_id_here>
 ```
 
-Click on the JupyterLab/VSCode link, or drop directly into an SSH shell by typying `shell`
+Click on the JupyterLab/VSCode link, or drop directly into an SSH shell by typing `shell`.
 
 
 ## ❓ Frequently Asked Questions
@@ -269,7 +269,7 @@ The local `clearml-session` awaits for the interactive Task to finish with the i
 it connects via SSH to the host machine (see "safe and stable" above), and tunnels
 both SSH and JupyterLab over the SSH connection.
 
-The end results is a local link which you can use to access the JupyterLab/VSCode on the remote machine, over a **secure and encrypted** connection!
+The end result is a local link which you can use to access the JupyterLab/VSCode on the remote machine, over a **secure and encrypted** connection!
 
 #### Does `clearml-session` support Kubernetes clusters?
 
@@ -277,7 +277,7 @@ Yes! `clearml-session` utilizes the `clearml-agent` kubernetes glue together wit
 any clearml-session to spin a container (pod) on the kubernetes cluster and securely connect **directly** into the pod.
 This feature does not require any kubernetes access from the users, and simplifies code
 development on kubernetes clusters as well as job scheduling & launching. 
-Read more on how to deploy clearml on kubernetes [here](https://clear.ml/docs/latest/docs/clearml_agent/#kubernetes)
+Read more on how to deploy clearml on kubernetes [here](https://clear.ml/docs/latest/docs/clearml_agent/#kubernetes).
 
 #### How can I use `clearml-session` to scale up / out development resources?
 
@@ -288,14 +288,14 @@ There is also a default docker image to use when initiating a task.
 This means that using **clearml-session**s
 with the autoscaler enabled, allows for turn-key secure development environment inside a docker of your choosing.
 
-Learn more about it [here](https://clear.ml/docs/latest/docs/guides/services/aws_autoscaler) & [here](https://clear.ml/docs/latest/docs/webapp/applications/apps_gpu_compute)
+Learn more about it [here](https://clear.ml/docs/latest/docs/guides/services/aws_autoscaler) & [here](https://clear.ml/docs/latest/docs/webapp/applications/apps_gpu_compute).
 
 #### Does `clearml-session` fit Work-From-Home setup?
 **YES**. Install `clearml-agent` on target machines inside the organization, connect over your company VPN 
 and use `clearml-session` to gain access to a dedicated on-prem machine with the docker of your choosing
 (with out-of-the-box support for any internal docker artifactory).
 
-Learn more about how to utilize your office workstations and on-prem machines [here](https://clear.ml/docs/latest/docs/clearml_agent)
+Learn more about how to utilize your office workstations and on-prem machines [here](https://clear.ml/docs/latest/docs/clearml_agent).
 
 ## ⌨️ CLI options
 
