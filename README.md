@@ -150,7 +150,7 @@ Checking previous session
 Connect to active session id=3d38e738c5ff458a9ec465e77e19da23 [Y]/n?
 ```
 
-### ⏻ Shutting down a remote session
+### Shutting down a remote session
 
 On the `clearml-session` CLI terminal, enter 'shutdown' (case-insensitive).
 It will shut down the remote session, free the resource and close the CLI:
@@ -337,19 +337,19 @@ optional arguments:
   --attach [ATTACH]     Attach to running interactive session (default: previous session)
   --shutdown [SHUTDOWN], -S [SHUTDOWN]
                         Shut down an active session (default: previous session)
-  --shell               Open the SSH shell session directly, notice quiting the SSH session will Not shutdown the
+  --shell               Open the SSH shell session directly, notice quitting the SSH session will Not shut down the
                         remote session
   --debugging-session DEBUGGING_SESSION
                         Pass existing Task id (experiment), create a copy of the experiment on a remote machine,
                         and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>
   --queue QUEUE         Select the queue to launch the interactive session on (default: previously used queue)
-  --docker DOCKER       Select the docker image to use in the interactive session on (default: previously used
+  --docker DOCKER       Select the docker image to use in the interactive session (default: previously used
                         docker image or `nvidia/cuda:11.6.2-runtime-ubuntu20.04`)
   --docker-args DOCKER_ARGS
                         Add additional arguments for the docker image to use in the interactive session on
                         (default: previously used docker-args)
   --public-ip [true/false]
-                        If True register the public IP of the remote machine. Set if running on the cloud.
+                        If True, register the public IP of the remote machine. Set if running on the cloud.
                         Default: false (use for local / on-premises)
   --remote-ssh-port REMOTE_SSH_PORT
                         Set the remote ssh server port, running on the agent`s machine. (default: 10022)
@@ -370,7 +370,7 @@ optional arguments:
                         Continue previous session (ID provided) restoring your workspace (see --store-workspace)
   --store-workspace STORE_WORKSPACE
                         Upload/Restore remote workspace folder. Example: `~/workspace/` will automatically
-                        restore/store the *containers* folder and extract it into next the session. Use with
+                        restore/store the *containers* folder and extract it into the next session. Use with
                         --continue-session to continue your previous work from your exact container state
   --git-credentials [true/false]
                         If true, local .git-credentials file is sent to the interactive session. (default: false)
@@ -405,7 +405,7 @@ optional arguments:
                         Advanced: If set, previous interactive sessions are not deleted
   --keepalive [true/false]
                         Advanced: If set, enables the transparent proxy always keeping the sockets alive. Default:
-                        False, do not use transparent socket for mitigating connection drops.
+                        False, do not use transparent sockets for mitigating connection drops.
   --queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]
                         Advanced: Excluded queues with this specific tag from the selection
   --queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]
