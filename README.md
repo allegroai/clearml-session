@@ -178,7 +178,7 @@ clearml-session shutdown --id <session_id>
 
 Continue working on an interactive session from **any** machine.
 In the `clearml` web UI, go to the DevOps project, and find your interactive session.
-Click the `ID` button next to the Task name to the unique ID.
+Click the `ID` button next to the Task name to copy the unique ID.
 
 ```bash
 clearml-session --attach <session_id>
