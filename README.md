@@ -13,6 +13,7 @@
 [![PyPI status](https://img.shields.io/pypi/status/clearml-session.svg)](https://pypi.python.org/pypi/clearml-session/)
 [![Slack Channel](https://img.shields.io/badge/slack-%23clearml--community-blueviolet?logo=slack)](https://joinslack.clear.ml)
 
+`🌟 ClearML is open-source - Leave a star to support the project! 🌟`
 
 </div>
 
@@ -419,6 +420,8 @@ optional arguments:
                         used one)
   --force-dropbear [true/false]
                         Force using `dropbear` instead of SSHd
+  --disable-store-defaults
+                        If set, do not store current setup as new default configuration
   --verbose             Advanced: If set, print verbose progress information, e.g. the remote machine setup
                         process log
   --yes, -y             Automatic yes to prompts; assume "yes" as answer to all prompts and run non-interactively

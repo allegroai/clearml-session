@@ -552,6 +552,10 @@ def ask_launch(args):
 
 
 def save_state(state, state_file):
+    # if disable_store_defaults skip storing the new state
+    if state.get('disable_store_defaults'):
+        return
+
     # if we are running in debugging mode,
     # only store the current task (do not change the defaults)
     if state.get('debugging_session'):
@@ -564,6 +568,8 @@ def save_state(state, state_file):
     # save new state
     with open(state_file, 'wt') as f:
         json.dump(state, f, sort_keys=True)
+
+    print("INFO: current configuration stored as new default")
 
 
 def load_state(state_file):
@@ -579,6 +585,7 @@ def load_state(state_file):
     state.pop('shell', None)
     state.pop('upload_files', None)
     state.pop('continue_session', None)
+    state.pop('disable_store_defaults', None)
     return state
 
 
@@ -1212,22 +1219,22 @@ def setup_parser(parser):
     parser.add_argument("--shutdown", "-S", default=None, const="", nargs="?",
                         help="Shut down an active session (default: previous session)")
     parser.add_argument("--shell", action='store_true', default=None,
-                        help="Open the SSH shell session directly, notice quitting the SSH session "
-                             "will Not shut down the remote session")
+                        help="Open the SSH shell session directly, notice quiting the SSH session "
+                             "will Not shutdown the remote session")
     parser.add_argument('--debugging-session', type=str, default=None,
                         help='Pass existing Task id (experiment), create a copy of the experiment on a remote machine, '
                              'and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>')
     parser.add_argument('--queue', type=str, default=None,
                         help='Select the queue to launch the interactive session on (default: previously used queue)')
     parser.add_argument('--docker', type=str, default=None,
-                        help='Select the docker image to use in the interactive session '
+                        help='Select the docker image to use in the interactive session on '
                              '(default: previously used docker image or `{}`)'.format(default_docker_image))
     parser.add_argument('--docker-args', type=str, default=None,
                         help='Add additional arguments for the docker image to use in the interactive session on '
                              '(default: previously used docker-args)')
     parser.add_argument('--public-ip', default=None, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
-                        help='If True, register the public IP of the remote machine. Set if running on the cloud. '
+                        help='If True register the public IP of the remote machine. Set if running on the cloud. '
                              'Default: false (use for local / on-premises)')
     parser.add_argument('--remote-ssh-port', type=str, default=None,
                         help='Set the remote ssh server port, running on the agent`s machine. (default: 10022)')
@@ -1254,7 +1261,7 @@ def setup_parser(parser):
     parser.add_argument('--store-workspace', type=str, default=None,
                         help='Upload/Restore remote workspace folder. '
                              'Example: `~/workspace/` will automatically restore/store the *containers* folder '
-                             'and extract it into the next session. '
+                             'and extract it into next the session. '
                              'Use with --continue-session to continue your '
                              'previous work from your exact container state')
     parser.add_argument('--git-credentials', default=False, nargs='?', const='true', metavar='true/false',
@@ -1296,7 +1303,7 @@ def setup_parser(parser):
     parser.add_argument('--keepalive', default=False, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Advanced: If set, enables the transparent proxy always keeping the sockets alive. '
-                             'Default: False, do not use transparent sockets for mitigating connection drops.')
+                             'Default: False, do not use transparent socket for mitigating connection drops.')
     parser.add_argument('--queue-excluded-tag', default=None, nargs='*',
                         help='Advanced: Excluded queues with this specific tag from the selection')
     parser.add_argument('--queue-include-tag', default=None, nargs='*',
@@ -1314,6 +1321,8 @@ def setup_parser(parser):
     parser.add_argument('--force-dropbear', default=None, nargs='?', const='true', metavar='true/false',
                         type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
                         help='Force using `dropbear` instead of SSHd')
+    parser.add_argument('--disable-store-defaults', action='store_true', default=None,
+                        help='If set, do not store current setup as new default configuration')
     parser.add_argument('--verbose', action='store_true', default=None,
                         help='Advanced: If set, print verbose progress information, '
                              'e.g. the remote machine setup process log')
@@ -1371,6 +1380,7 @@ def cli():
         state['verbose'] = args.verbose
 
     state['shell'] = bool(args.shell)
+    state['disable_store_defaults'] = bool(args.disable_store_defaults)
 
     if args.command:
         if args.command in ("info", "shutdown") and not args.id:
