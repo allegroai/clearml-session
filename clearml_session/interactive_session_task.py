@@ -270,9 +270,10 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
     env = dict(**env)
     env.pop('PYTHONPATH', None)
 
-    python_ext_download_link = \
-        os.environ.get("CLEARML_SESSION_VSCODE_PY_EXT") or \
-        'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'
+    # example of CLEARML_SESSION_VSCODE_PY_EXT value
+    # 'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'
+    python_ext_download_link = os.environ.get("CLEARML_SESSION_VSCODE_PY_EXT")
+
     code_server_deb_download_link = \
         os.environ.get("CLEARML_SESSION_VSCODE_SERVER_DEB") or \
         'https://github.com/coder/code-server/releases/download/v{version}/code-server_{version}_amd64.deb'
@@ -297,7 +298,7 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
             try:
                 python_ext = StorageManager.get_local_copy(
                     python_ext_download_link.format(python_ext_version),
-                    extract_archive=False)
+                    extract_archive=False) if python_ext_download_link else None
                 code_server_deb = StorageManager.get_local_copy(
                     code_server_deb_download_link.format(version=vscode_version),
                     extract_archive=False)
@@ -613,7 +614,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
             # noinspection PyBroadException
             try:
                 # try running SSHd as non-root (currently bypassed, use dropbear instead)
-                sshd_path = None ## subprocess.check_output('which sshd', shell=True).decode().strip()
+                sshd_path = None  ## subprocess.check_output('which sshd', shell=True).decode().strip()
                 if not sshd_path:
                     raise ValueError("sshd was not found")
             except Exception:
