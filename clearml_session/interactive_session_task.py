@@ -798,6 +798,9 @@ def setup_user_env(param, task):
                 env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
             return env
 
+    # target source config
+    source_conf = '~/.clearmlrc'
+
     # create symbolic link to the venv
     environment = os.path.expanduser('~/environment')
     # noinspection PyBroadException
@@ -810,46 +813,45 @@ def setup_user_env(param, task):
 
     # set default user credentials
     if param.get("user_key") and param.get("user_secret"):
-        os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.bashrc".format(
-            param.get("user_key", "").replace('$', '\\$')))
-        os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.bashrc".format(
-            param.get("user_secret", "").replace('$', '\\$')))
-        os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> ~/.profile".format(
-            param.get("user_key", "").replace('$', '\\$')))
-        os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> ~/.profile".format(
-            param.get("user_secret", "").replace('$', '\\$')))
+        os.system("echo 'export CLEARML_API_ACCESS_KEY=\"{}\"' >> {}".format(
+            param.get("user_key", "").replace('$', '\\$'), source_conf))
+        os.system("echo 'export CLEARML_API_SECRET_KEY=\"{}\"' >> {}".format(
+            param.get("user_secret", "").replace('$', '\\$'), source_conf))
         env['CLEARML_API_ACCESS_KEY'] = param.get("user_key")
         env['CLEARML_API_SECRET_KEY'] = param.get("user_secret")
     elif os.environ.get("CLEARML_AUTH_TOKEN"):
         env['CLEARML_AUTH_TOKEN'] = os.environ.get("CLEARML_AUTH_TOKEN")
-        os.system("echo 'export CLEARML_AUTH_TOKEN=\"{}\"' >> ~/.bashrc".format(
-            os.environ.get("CLEARML_AUTH_TOKEN").replace('$', '\\$')))
-        os.system("echo 'export CLEARML_AUTH_TOKEN=\"{}\"' >> ~/.profile".format(
-            os.environ.get("CLEARML_AUTH_TOKEN").replace('$', '\\$')))
+        os.system("echo 'export CLEARML_AUTH_TOKEN=\"{}\"' >> {}".format(
+            os.environ.get("CLEARML_AUTH_TOKEN").replace('$', '\\$'), source_conf))
 
     if param.get("default_docker"):
-        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.profile".format(
-            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
-        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> ~/.bashrc".format(
-            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', '')))
+        os.system("echo 'export CLEARML_DOCKER_IMAGE=\"{}\"' >> {}".format(
+            param.get("default_docker", "").strip() or env.get('CLEARML_DOCKER_IMAGE', ''), source_conf))
 
     if vault_environment:
         for k, v in vault_environment.items():
-            os.system("echo 'export {}=\"{}\"' >> ~/.profile".format(k, v))
-            os.system("echo 'export {}=\"{}\"' >> ~/.bashrc".format(k, v))
+            os.system("echo 'export {}=\"{}\"' >> {}".format(k, v, source_conf))
             env[k] = str(v) if v else ""
+
+    # make sure we activate the venv in the bash
+    if Path(os.path.join(environment, 'bin', 'activate')).expanduser().exists():
+        os.system("echo 'source {}' >> {}".format(os.path.join(environment, 'bin', 'activate'), source_conf))
+    elif Path(os.path.join(environment, 'etc', 'conda', 'activate.d')).expanduser().exists():
+        # let conda patch the bashrc
+        os.system("conda init")
+        # make sure we activate this environment by default
+        os.system("echo 'conda activate {}' >> {}".format(environment, source_conf))
 
     # set default folder for user
     if param.get("user_base_directory"):
         base_dir = param.get("user_base_directory")
         if ' ' in base_dir:
             base_dir = '\"{}\"'.format(base_dir)
-        os.system("echo 'cd {}' >> ~/.bashrc".format(base_dir))
-        os.system("echo 'cd {}' >> ~/.profile".format(base_dir))
+        os.system("echo 'cd {}' >> {}".format(base_dir, source_conf))
 
-    # make sure we activate the venv in the bash
-    os.system("echo 'source {}' >> ~/.bashrc".format(os.path.join(environment, 'bin', 'activate')))
-    os.system("echo '. {}' >> ~/.profile".format(os.path.join(environment, 'bin', 'activate')))
+    # make sure we load the source configuration
+    os.system("echo 'source {}' >> ~/.bashrc".format(source_conf))
+    os.system("echo '. {}' >> ~/.profile".format(source_conf))
 
     # check if we need to create .git-credentials
 
