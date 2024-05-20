@@ -562,9 +562,18 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
 
     print("Installing SSH Server on {} [{}]".format(hostname, hostnames))
     ssh_password = param.get("ssh_password", "training")
+
+    ssh_port = None
+    if Session.check_min_api_version("2.13"):
+        try:
+            # noinspection PyProtectedMember
+            ssh_port = task._get_runtime_properties().get("internal_tcp_port")
+        except Exception as ex:
+            print("Failed retrieving internal TCP port for SSH daemon: {}".format(ex))
+
     # noinspection PyBroadException
     try:
-        ssh_port = param.get("ssh_ports") or "10022:15000"
+        ssh_port = ssh_port or param.get("ssh_ports") or "10022:15000"
         min_port = int(ssh_port.split(":")[0])
         max_port = max(min_port+32, int(ssh_port.split(":")[-1]))
         port = get_free_port(min_port, max_port)
