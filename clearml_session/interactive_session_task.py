@@ -739,6 +739,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
             if proxy_port:
                 task.set_parameter(name='properties/internal_stable_ssh_port', value=str(proxy_port))
             task.set_parameter(name='properties/internal_ssh_port', value=str(port))
+            task._set_runtime_properties(runtime_properties={'internal_ssh_port': str(port)})
 
         print(
             "\n#\n# SSH Server running on {} [{}] port {}\n# LOGIN u:root p:{}\n#\n".format(
