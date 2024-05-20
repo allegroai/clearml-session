@@ -843,10 +843,12 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
     # store SSH output
     fd = StringIO() if debug else sys.stdout
 
+    command = None
     # noinspection PyBroadException
     try:
+        command = _check_ssh_executable()
         child = pexpect.spawn(
-            command=_check_ssh_executable(),
+            command=command,
             args=args,
             logfile=fd, timeout=20, encoding='utf-8')
 
@@ -880,8 +882,14 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
                     raise ValueError('Incorrect password')
                 except pexpect.TIMEOUT:
                     pass
-    except Exception:
-        child.terminate(force=True)
+    except Exception as ex:
+        if debug:
+            print("ERROR: running local SSH client [{}] failed connecting to {}: {}".format(command, args, ex))
+        else:
+            print("ERROR: running local SSH client failed connecting to {}: {}".format(remote_address, ex))
+
+        if child:
+            child.terminate(force=True)
         child = None
     print('\n')
     if child:
