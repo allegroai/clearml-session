@@ -11,6 +11,7 @@ from functools import reduce, partial
 from getpass import getpass
 from io import TextIOBase, StringIO
 from time import time, sleep
+from uuid import uuid4
 
 if sys.platform == 'win32':
     import msvcrt  # noqa
@@ -492,7 +493,7 @@ def get_user_inputs(args, parser, state, client):
                     a, parser._option_string_actions['--{}'.format(a.replace('_', '-'))].help))
     # if no password was set, create a new random one
     if not state.get('password'):
-        state['password'] = hashlib.sha256("seed me Seymour {}".format(time()).encode()).hexdigest()
+        state['password'] = hashlib.sha256("seed me {} {}".format(uuid4(), time()).encode()).hexdigest()
 
     # store the requirements from the requirements.txt
     # override previous requirements
