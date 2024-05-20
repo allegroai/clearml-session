@@ -132,7 +132,7 @@ def init_task(param, a_default_ssh_fingerprint):
     except (TypeError, ValueError):
         a_default_ssh_fingerprint.clear()
         a_default_ssh_fingerprint.update(old_default_ssh_fingerprint)
-    if param.get('default_docker'):
+    if param.get('default_docker') and task.running_locally():
         task.set_base_docker("{} --network host".format(param['default_docker']))
     # leave local process, only run remotely
     task.execute_remotely()

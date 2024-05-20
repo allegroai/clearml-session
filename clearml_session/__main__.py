@@ -741,7 +741,7 @@ def clone_task(state, project_id=None):
     return task
 
 
-def wait_for_machine(state, task):
+def wait_for_machine(state, task, only_wait_for_ssh=False):
     # wait until task is running
     print('Waiting for remote machine allocation [id={}]'.format(task.id))
     last_status = None
@@ -781,9 +781,9 @@ def wait_for_machine(state, task):
     state['vscode_server'] = vscode_server.strip().lower() != 'false'
 
     wait_properties = ['properties/internal_ssh_port']
-    if state.get('jupyter_lab'):
+    if state.get('jupyter_lab') and not only_wait_for_ssh:
         wait_properties += ['properties/jupyter_port']
-    if state.get('vscode_server'):
+    if state.get('vscode_server') and not only_wait_for_ssh:
         wait_properties += ['properties/vscode_port']
 
     last_lines = []
@@ -1467,6 +1467,7 @@ def cli():
     task = _get_previous_session(client, args, state, task_id=args.attach)
 
     delete_old_tasks_callback = None
+    only_wait_for_ssh = False
 
     if task:
         state['task_id'] = task.id
@@ -1475,6 +1476,7 @@ def cli():
             state['username'] = args.username
         if args.password:
             state['password'] = args.password
+        only_wait_for_ssh = True
     else:
         state.pop('task_id', None)
         save_state(state, state_file)
@@ -1511,7 +1513,7 @@ def cli():
 
     # wait for machine to become available
     try:
-        wait_for_machine(state, task)
+        wait_for_machine(state, task, only_wait_for_ssh=only_wait_for_ssh)
     except ValueError as ex:
         print('\nERROR: {}'.format(ex))
         return 1
