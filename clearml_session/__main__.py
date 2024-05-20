@@ -1492,9 +1492,12 @@ def cli():
         # ask user final approval
         ask_launch(args)
 
-        # remove old Tasks created by us.
-        # (now we do it Only after a successful remote session)
-        delete_old_tasks_callback = partial(delete_old_tasks, state, client, state.get('base_task_id'))
+        # remove old Tasks created by us, unless we have to restore workspace,
+        if state.get("store_workspace") or state.get("continue_session"):
+            # then we do it Only after a successful remote session
+            delete_old_tasks_callback = partial(delete_old_tasks, state, client, state.get('base_task_id'))
+        else:
+            delete_old_tasks(state, client, state.get('base_task_id'))
 
         # Clone the Task and adjust parameters
         task = clone_task(state)
