@@ -127,17 +127,17 @@ or drop into **SSH** shell by typing `shell`.
 
 Open your terminal, clone your code & start working :)
 
-> ℹ️ **TIP**: You can additional python package to your remote session setup by adding `--packages` to the command line, 
-> for example to add `boto3` add `--packages "boto3>1"`
+> ℹ️ **TIP**: You can additional python package to your remote session setup by adding `--packages` to the command line. 
+> For example: to add `boto3`, add `--packages "boto3>1"`.
 
 > ℹ️ **TIP**: If you need direct SSH into the remote container from your terminal, 
-> you can directly drop into a shell by adding `--shell` to the command line
+> you can directly drop into a shell by adding `--shell` to the command line.
 
 
 ### 📞 Leaving a session and reconnecting to it
 
-On the `clearml-session` CLI terminal, enter 'quit' or press `Ctrl-C`
-It will close the CLI but preserve the remote session (i.e. remote session will remain running)
+On the `clearml-session` CLI terminal, enter 'quit' or press `Ctrl-C`.
+It will close the CLI but preserve the remote session (i.e. remote session will remain running).
 
 When you want to reconnect to it, execute:
 ``` bash
@@ -151,7 +151,7 @@ Checking previous session
 Connect to active session id=3d38e738c5ff458a9ec465e77e19da23 [Y]/n?
 ```
 
-### Shutting down a remote session
+### ⏻ Shutting down a remote session
 
 On the `clearml-session` CLI terminal, enter 'shutdown' (case-insensitive).
 It will shut down the remote session, free the resource and close the CLI:
@@ -179,7 +179,7 @@ clearml-session shutdown --id <session_id>
 
 Continue working on an interactive session from **any** machine.
 In the `clearml` web UI, go to the DevOps project, and find your interactive session.
-Click on the ID button next to the Task name, and copy the unique ID.
+Click the `ID` button next to the Task name to copy the unique ID.
 
 ```bash
 clearml-session --attach <session_id>
