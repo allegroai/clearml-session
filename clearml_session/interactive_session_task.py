@@ -127,13 +127,36 @@ def init_task(param, a_default_ssh_fingerprint):
 
     # connect ssh fingerprint configuration (with fallback if section is missing)
     old_default_ssh_fingerprint = deepcopy(a_default_ssh_fingerprint)
-    try:
-        task.connect_configuration(configuration=a_default_ssh_fingerprint, name=config_object_section_ssh)
-    except (TypeError, ValueError):
-        a_default_ssh_fingerprint.clear()
-        a_default_ssh_fingerprint.update(old_default_ssh_fingerprint)
+    found_server_ssh_fingerprint = None
+    if Session.check_min_api_version('2.20'):
+        print("INFO: checking remote ssh server fingerprint from server vault")
+        # noinspection PyBroadException
+        try:
+            res = task.session.send_request(
+                "users", "get_vaults",
+                params="enabled=true&types=remote_session_ssh_server&"
+                       "types=remote_session_ssh_server").json()
+            if res.get('data', {}).get('vaults'):
+                found_server_ssh_fingerprint = json.loads(res['data']['vaults'][-1]['data'])
+                a_default_ssh_fingerprint.update(found_server_ssh_fingerprint)
+                print("INFO: loading fingerprint from server vault successfully: {}".format(
+                    list(found_server_ssh_fingerprint.keys())))
+            else:
+                print("INFO: server side fingerprint was not found")
+        except Exception as ex:
+            print("DEBUG: server side fingerprint parsing error: {}".format(ex))
+
+    if not found_server_ssh_fingerprint:
+        try:
+            # print("DEBUG: loading fingerprint from task")
+            task.connect_configuration(configuration=a_default_ssh_fingerprint, name=config_object_section_ssh)
+        except (TypeError, ValueError):
+            a_default_ssh_fingerprint.clear()
+            a_default_ssh_fingerprint.update(old_default_ssh_fingerprint)
+
     if param.get('default_docker') and task.running_locally():
         task.set_base_docker("{} --network host".format(param['default_docker']))
+
     # leave local process, only run remotely
     task.execute_remotely()
     return task

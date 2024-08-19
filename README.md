@@ -418,10 +418,15 @@ optional arguments:
                         or previously used one)
   --username USERNAME   Advanced: Select ssh username for the interactive session (default: `root` or previously
                         used one)
+  --randomize           Advanced: Recreate a new random ssh password for the interactive session options: 
+                        `--randomize` one time recreate, --randomize `always` create a new random password for 
+                        every session                        
   --force-dropbear [true/false]
                         Force using `dropbear` instead of SSHd
   --disable-store-defaults
                         If set, do not store current setup as new default configuration
+  --disable-fingerprint-check
+                        Advanced: If set, ignore the remote SSH server fingerprint check
   --verbose             Advanced: If set, print verbose progress information, e.g. the remote machine setup
                         process log
   --yes, -y             Automatic yes to prompts; assume "yes" as answer to all prompts and run non-interactively
