@@ -715,6 +715,7 @@ def clone_task(state, project_id=None):
     task_params["{}/force_dropbear".format(section)] = bool(state.get('force_dropbear'))
     task_params["{}/store_workspace".format(section)] = state.get('store_workspace')
     task_params["{}/use_ssh_proxy".format(section)] = state.get('keepalive')
+    task_params["{}/router_enabled".format(section)] = bool(state.get('router_enabled'))
     if state.get('user_folder'):
         task_params['{}/user_base_directory'.format(section)] = state.get('user_folder')
     docker = state.get('docker') or task.get_base_docker()
@@ -977,7 +978,8 @@ def start_ssh_tunnel(username, remote_address, ssh_port, ssh_password, local_rem
         if debug:
             print("ERROR: running local SSH client [{}] failed connecting to {}: {}".format(command, args, ex))
         else:
-            print("ERROR: running local SSH client failed connecting to {}: {}".format(remote_address, ex))
+            print("ERROR: running local SSH client failed connecting to {} [{}]\n"
+                  "       for additional details re-run with --verbose".format(remote_address, type(ex)))
 
         if child:
             child.terminate(force=True)
@@ -1165,6 +1167,8 @@ def monitor_ssh_tunnel(state, task, ssh_setup_completed_callback=None):
                 else:
                     logging.getLogger().warning('SSH tunneling failed, retrying in {} seconds'.format(3))
                     sleep(3.)
+                    # clear ssh port, so that we reload it from Task (i.e. sync with router if it's there)
+                    ssh_port = None
                     continue
 
             connect_state['reconnect'] = False
@@ -1355,6 +1359,10 @@ def setup_parser(parser):
                              'and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>')
     parser.add_argument('--queue', type=str, default=None,
                         help='Select the queue to launch the interactive session on (default: previously used queue)')
+    parser.add_argument("--router-enabled", default=None, nargs='?', const='true', metavar='true/false',
+                        type=lambda x: (str(x).strip().lower() in ('true', 'yes')),
+                        help="If we have a clearml Router set, make sure we request direct TCP routing "
+                             "to our container. ")
     parser.add_argument('--docker', type=str, default=None,
                         help='Select the docker image to use in the interactive session on '
                              '(default: previously used docker image or `{}`)'.format(default_docker_image))

@@ -591,6 +591,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
     print("Installing SSH Server on {} [{}]".format(hostname, hostnames))
     ssh_password = param.get("ssh_password", "training")
 
+    proxy_port = port = None
     ssh_port = None
     if Session.check_min_api_version("2.13"):
         try:
@@ -796,6 +797,8 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
 
     except Exception as ex:
         print("Error: {}\n\n#\n# Error: SSH server could not be launched\n#\n".format(ex))
+
+    return proxy_port or port
 
 
 def _b64_decode_file(encoded_string):
@@ -1019,6 +1022,7 @@ def get_host_name(task, param):
     # update host name
     if (not task.get_parameter(name='properties/external_address') and
             not task.get_parameter(name='properties/k8s-gateway-address')):
+
         if task._get_runtime_properties().get("external_address"):
             external_addr = task._get_runtime_properties().get("external_address")
         else:
@@ -1274,8 +1278,14 @@ def main():
         "force_dropbear": False,
         "store_workspace": None,
         "use_ssh_proxy": False,
+        "router_enabled": False,
     }
     task = init_task(param, default_ssh_fingerprint)
+
+    # if router is enabled, do not request a public IP, enforce local IP
+    if param.get("router_enabled") and param.get("public_ip"):
+        print("External TCP router configured, disabling `public_ip` request")
+        param["public_ip"] = False
 
     run_user_init_script(task)
 
@@ -1294,7 +1304,20 @@ def main():
 
     env = setup_user_env(param, task)
 
-    setup_ssh_server(hostname, hostnames, param, task, env)
+    ssh_port = setup_ssh_server(hostname, hostnames, param, task, env)
+
+    # make sure we set it to the runtime properties
+    if ssh_port and param.get("router_enabled"):
+        # noinspection PyProtectedMember
+        address = task._get_runtime_properties().get("external_address") or ""
+        print("Requesting TCP route from router ingress to {} port {}".format(address, ssh_port))
+        # noinspection PyProtectedMember
+        task._set_runtime_properties({
+            "external_address": address,
+            "external_tcp_port": ssh_port,
+            "_SERVICE": "EXTERNAL_TCP",
+        })
+        task.set_system_tags((task.get_system_tags() or []) + ["external_service"])
 
     start_vscode_server(hostname, hostnames, param, task, env)
 

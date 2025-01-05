@@ -307,21 +307,20 @@ clearml-session --help
 ```console
 clearml-session - CLI for launching JupyterLab / VSCode / SSH on a remote machine
 usage: clearml-session [-h] [--version] [--attach [ATTACH]] [--shutdown [SHUTDOWN]] [--shell]
-                       [--debugging-session DEBUGGING_SESSION] [--queue QUEUE] [--docker DOCKER]
+                       [--debugging-session DEBUGGING_SESSION] [--queue QUEUE] [--router-enabled] [--docker DOCKER]
                        [--docker-args DOCKER_ARGS] [--public-ip [true/false]] [--remote-ssh-port REMOTE_SSH_PORT]
-                       [--vscode-server [true/false]] [--vscode-version VSCODE_VERSION]
-                       [--vscode-extensions VSCODE_EXTENSIONS] [--jupyter-lab [true/false]]
-                       [--upload-files UPLOAD_FILES] [--continue-session CONTINUE_SESSION]
-                       [--store-workspace STORE_WORKSPACE] [--git-credentials [true/false]]
-                       [--user-folder USER_FOLDER] [--packages [PACKAGES [PACKAGES ...]]]
-                       [--requirements REQUIREMENTS] [--init-script [INIT_SCRIPT]] [--config-file CONFIG_FILE]
-                       [--remote-gateway [REMOTE_GATEWAY]] [--base-task-id BASE_TASK_ID] [--project PROJECT]
-                       [--session-name SESSION_NAME] [--session-tags [SESSION_TAGS [SESSION_TAGS ...]]]
+                       [--vscode-server [true/false]] [--vscode-version VSCODE_VERSION] [--vscode-extensions VSCODE_EXTENSIONS]
+                       [--jupyter-lab [true/false]] [--upload-files UPLOAD_FILES] [--continue-session CONTINUE_SESSION]
+                       [--store-workspace STORE_WORKSPACE] [--git-credentials [true/false]] [--user-folder USER_FOLDER]
+                       [--packages [PACKAGES [PACKAGES ...]]] [--requirements REQUIREMENTS] [--init-script [INIT_SCRIPT]]
+                       [--config-file CONFIG_FILE] [--remote-gateway [REMOTE_GATEWAY]] [--base-task-id BASE_TASK_ID]
+                       [--project PROJECT] [--session-name SESSION_NAME] [--session-tags [SESSION_TAGS [SESSION_TAGS ...]]]
                        [--disable-session-cleanup [true/false]] [--keepalive [true/false]]
                        [--queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]]
-                       [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]]
-                       [--skip-docker-network [true/false]] [--password PASSWORD] [--username USERNAME]
-                       [--force-dropbear [true/false]] [--verbose] [--yes]
+                       [--queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]] [--skip-docker-network [true/false]]
+                       [--password PASSWORD] [--randomize [RANDOMIZE [RANDOMIZE ...]]] [--username USERNAME]
+                       [--force-dropbear [true/false]] [--disable-store-defaults] [--disable-fingerprint-check] [--verbose]
+                       [--yes]
                        {list,info,shutdown} ...
 
 clearml-session - CLI for launching JupyterLab / VSCode / SSH on a remote machine
@@ -338,65 +337,64 @@ optional arguments:
   --attach [ATTACH]     Attach to running interactive session (default: previous session)
   --shutdown [SHUTDOWN], -S [SHUTDOWN]
                         Shut down an active session (default: previous session)
-  --shell               Open the SSH shell session directly, notice quitting the SSH session will Not shut down the
-                        remote session
+  --shell               Open the SSH shell session directly, notice quiting the SSH session will Not shutdown the remote session
   --debugging-session DEBUGGING_SESSION
-                        Pass existing Task id (experiment), create a copy of the experiment on a remote machine,
-                        and launch jupyter/ssh for interactive access. Example --debugging-session <task_id>
+                        Pass existing Task id (experiment), create a copy of the experiment on a remote machine, and launch
+                        jupyter/ssh for interactive access. Example --debugging-session <task_id>
   --queue QUEUE         Select the queue to launch the interactive session on (default: previously used queue)
-  --docker DOCKER       Select the docker image to use in the interactive session (default: previously used
-                        docker image or `nvidia/cuda:11.6.2-runtime-ubuntu20.04`)
+  --router-enabled      If we have a clearml Router set, make sure we request direct TCP routing to our container.
+  --docker DOCKER       Select the docker image to use in the interactive session on (default: previously used docker image or
+                        `nvidia/cuda:11.6.2-runtime-ubuntu20.04`)
   --docker-args DOCKER_ARGS
-                        Add additional arguments for the docker image to use in the interactive session on
-                        (default: previously used docker-args)
+                        Add additional arguments for the docker image to use in the interactive session on (default: previously
+                        used docker-args)
   --public-ip [true/false]
-                        If True, register the public IP of the remote machine. Set if running on the cloud.
-                        Default: false (use for local / on-premises)
+                        If True register the public IP of the remote machine. Set if running on the cloud. Default: false (use
+                        for local / on-premises)
   --remote-ssh-port REMOTE_SSH_PORT
                         Set the remote ssh server port, running on the agent`s machine. (default: 10022)
   --vscode-server [true/false]
                         Install vscode server (code-server) on interactive session (default: true)
   --vscode-version VSCODE_VERSION
-                        Set vscode server (code-server) version, as well as vscode python extension version
-                        <vscode:python-ext> (example: "3.7.4:2020.10.332292344")
+                        Set vscode server (code-server) version, as well as vscode python extension version <vscode:python-ext>
+                        (example: "3.7.4:2020.10.332292344")
   --vscode-extensions VSCODE_EXTENSIONS
-                        Install additional vscode extensions, as well as vscode python extension (example: "ms-
-                        python.python,ms-python.black-formatter,ms-python.pylint,ms-python.flake8")
+                        Install additional vscode extensions, as well as vscode python extension (example: "ms-python.python,ms-
+                        python.black-formatter,ms-python.pylint,ms-python.flake8")
   --jupyter-lab [true/false]
                         Install Jupyter-Lab on interactive session (default: true)
   --upload-files UPLOAD_FILES
-                        Advanced: Upload local files/folders to the remote session. Example: `/my/local/data/`
-                        will upload the local folder and extract it into the container in ~/session-files/
+                        Advanced: Upload local files/folders to the remote session. Example: `/my/local/data/` will upload the
+                        local folder and extract it into the container in ~/session-files/
   --continue-session CONTINUE_SESSION
                         Continue previous session (ID provided) restoring your workspace (see --store-workspace)
   --store-workspace STORE_WORKSPACE
-                        Upload/Restore remote workspace folder. Example: `~/workspace/` will automatically
-                        restore/store the *containers* folder and extract it into the next session. Use with
-                        --continue-session to continue your previous work from your exact container state
+                        Upload/Restore remote workspace folder. Example: `~/workspace/` will automatically restore/store the
+                        *containers* folder and extract it into next the session. Use with --continue-session to continue your
+                        previous work from your exact container state
   --git-credentials [true/false]
                         If true, local .git-credentials file is sent to the interactive session. (default: false)
   --user-folder USER_FOLDER
                         Advanced: Set the remote base folder (default: ~/)
   --packages [PACKAGES [PACKAGES ...]]
-                        Additional packages to add, supports version numbers (default: previously added packages).
-                        examples: --packages torch==1.7 tqdm
+                        Additional packages to add, supports version numbers (default: previously added packages). examples:
+                        --packages torch==1.7 tqdm
   --requirements REQUIREMENTS
-                        Specify requirements.txt file to install when setting the interactive session.
-                        Requirements file is read and stored in `packages` section as default for the next
-                        sessions. Can be overridden by calling `--packages`
+                        Specify requirements.txt file to install when setting the interactive session. Requirements file is read
+                        and stored in `packages` section as default for the next sessions. Can be overridden by calling
+                        `--packages`
   --init-script [INIT_SCRIPT]
-                        Specify BASH init script file to be executed when setting the interactive session. Script
-                        content is read and stored as default script for the next sessions. To clear the init-
-                        script do not pass a file
+                        Specify BASH init script file to be executed when setting the interactive session. Script content is
+                        read and stored as default script for the next sessions. To clear the init-script do not pass a file
   --config-file CONFIG_FILE
                         Advanced: Change the configuration file used to store the previous state (default:
                         ~/.clearml_session.json)
   --remote-gateway [REMOTE_GATEWAY]
-                        Advanced: Specify gateway ip/address:port to be passed to interactive session (for use
-                        with k8s ingestion / ELB)
+                        Advanced: Specify gateway ip/address:port to be passed to interactive session (for use with k8s
+                        ingestion / ELB)
   --base-task-id BASE_TASK_ID
-                        Advanced: Set the base task ID for the interactive session. (default: previously used
-                        Task). Use `none` for the default interactive session
+                        Advanced: Set the base task ID for the interactive session. (default: previously used Task). Use `none`
+                        for the default interactive session
   --project PROJECT     Advanced: Set the project name for the interactive session Task
   --session-name SESSION_NAME
                         Advanced: Set the name of the interactive session Task
@@ -405,33 +403,32 @@ optional arguments:
   --disable-session-cleanup [true/false]
                         Advanced: If set, previous interactive sessions are not deleted
   --keepalive [true/false]
-                        Advanced: If set, enables the transparent proxy always keeping the sockets alive. Default:
-                        False, do not use transparent sockets for mitigating connection drops.
+                        Advanced: If set, enables the transparent proxy always keeping the sockets alive. Default: False, do not
+                        use transparent socket for mitigating connection drops.
   --queue-excluded-tag [QUEUE_EXCLUDED_TAG [QUEUE_EXCLUDED_TAG ...]]
                         Advanced: Excluded queues with this specific tag from the selection
   --queue-include-tag [QUEUE_INCLUDE_TAG [QUEUE_INCLUDE_TAG ...]]
                         Advanced: Only include queues with this specific tag from the selection
   --skip-docker-network [true/false]
-                        Advanced: If set, `--network host` is **not** passed to docker (assumes k8s network
-                        ingestion) (default: false)
-  --password PASSWORD   Advanced: Select ssh password for the interactive session (default: `randomly-generated`
-                        or previously used one)
-  --username USERNAME   Advanced: Select ssh username for the interactive session (default: `root` or previously
+                        Advanced: If set, `--network host` is **not** passed to docker (assumes k8s network ingestion) (default:
+                        false)
+  --password PASSWORD   Advanced: Select ssh password for the interactive session (default: `randomly-generated` or previously
                         used one)
-  --randomize           Advanced: Recreate a new random ssh password for the interactive session options: 
-                        `--randomize` one time recreate, --randomize `always` create a new random password for 
-                        every session                        
+  --randomize [RANDOMIZE [RANDOMIZE ...]]
+                        Advanced: Recreate a new random ssh password for the interactive session options: `--randomize` one time
+                        recreate random password, --randomize `always` create a new random password for every session
+  --username USERNAME   Advanced: Select ssh username for the interactive session (default: `root` or previously used one)
   --force-dropbear [true/false]
                         Force using `dropbear` instead of SSHd
   --disable-store-defaults
                         If set, do not store current setup as new default configuration
   --disable-fingerprint-check
                         Advanced: If set, ignore the remote SSH server fingerprint check
-  --verbose             Advanced: If set, print verbose progress information, e.g. the remote machine setup
-                        process log
+  --verbose             Advanced: If set, print verbose progress information, e.g. the remote machine setup process log
   --yes, -y             Automatic yes to prompts; assume "yes" as answer to all prompts and run non-interactively
 
 Notice! all arguments are stored as new defaults for the next execution
+
 ```
 
 
