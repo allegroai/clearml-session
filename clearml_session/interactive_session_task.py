@@ -17,7 +17,7 @@ import requests
 from clearml import Task, StorageManager
 from clearml.backend_api import Session
 from clearml.backend_api.services import tasks
-from pathlib2 import Path
+from pathlib import Path
 
 # noinspection SpellCheckingInspection
 default_ssh_fingerprint = {
@@ -281,8 +281,8 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
 
     # get vscode version and python extension version
     # they are extremely flaky, this combination works, most do not.
-    vscode_version = '4.14.1'
-    python_ext_version = '2023.12.0'
+    vscode_version = '4.96.2'
+    python_ext_version = '2024.22.1'
     if param.get("vscode_version"):
         vscode_version_parts = param.get("vscode_version").split(':')
         vscode_version = vscode_version_parts[0]
@@ -294,9 +294,13 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
     env.pop('PYTHONPATH', None)
 
     # example of CLEARML_SESSION_VSCODE_PY_EXT value
-    # 'https://github.com/microsoft/vscode-python/releases/download/{}/ms-python-release.vsix'
+    # 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-python/vsextensions/python/2022.12.0/vspackage'
+    # (see https://marketplace.visualstudio.com/items?itemName=ms-python.python).
     python_ext_download_link = os.environ.get("CLEARML_SESSION_VSCODE_PY_EXT")
 
+    # example of CLEARML_SESSION_VSCODE_SERVER_DEB value
+    # 'https://github.com/coder/code-server/releases/download/v4.96.2/code-server_4.96.2_amd64.deb'
+    # (see https://github.com/coder/code-server/releases)
     code_server_deb_download_link = \
         os.environ.get("CLEARML_SESSION_VSCODE_SERVER_DEB") or \
         'https://github.com/coder/code-server/releases/download/v{version}/code-server_{version}_amd64.deb'
@@ -433,6 +437,7 @@ def start_vscode_server(hostname, hostnames, param, task, env, bind_ip="127.0.0.
                     "security.workspace.trust.untrustedFiles": "open",
                     # "security.workspace.trust.startupPrompt": "never",
                     "security.workspace.trust.enabled": False,
+                    "telemetry.telemetryLevel": "off",
                 })
                 with open(settings.as_posix(), 'wt') as f:
                     json.dump(base_json, f)
@@ -659,7 +664,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                     print('WARNING: SSHd was not found defaulting to user-space dropbear sshd server')
                     dropbear_download_link = \
                         os.environ.get("CLEARML_DROPBEAR_EXEC") or \
-                        'https://github.com/allegroai/dropbear/releases/download/DROPBEAR_CLEARML_2023.02/dropbearmulti'
+                        'https://github.com/allegroai/dropbear/releases/download/DROPBEAR_CLEARML_2024.86/dropbearmulti'
                     dropbear = StorageManager.get_local_copy(dropbear_download_link, extract_archive=False)
                     os.chmod(dropbear, 0o744)
                     sshd_path = dropbear
@@ -1106,7 +1111,8 @@ def _sync_workspace_snapshot(task, param):
     print("Uploading workspace: {}".format(workspace_folder))
 
     # force running status - so that we can upload the artifact
-    if task.status not in ("in_progress", ):
+    prev_status = task.status
+    if prev_status not in ("in_progress", ):
         task.mark_started(force=True)
 
     try:
@@ -1179,7 +1185,12 @@ def _sync_workspace_snapshot(task, param):
     except Exception as ex:
         print("ERROR: Failed syncing workspace [{}]: {}".format(workspace_folder, ex))
     finally:
-        task.mark_stopped(force=True, status_message="workspace shutdown sync completed")
+        if prev_status in ("failed", ):
+            task.mark_failed(force=True, status_message="workspace shutdown sync completed")
+        elif prev_status in ("completed", ):
+            task.mark_completed(force=True, status_message="workspace shutdown sync completed")
+        else:
+            task.mark_stopped(force=True, status_message="workspace shutdown sync completed")
 
 
 def sync_workspace_snapshot(task, param):
@@ -1199,7 +1210,7 @@ def restore_workspace(task, param):
         # check if we have something to restore, show warning
         if artifact_workspace_name in task.artifacts:
             print("WARNING: Found workspace snapshot, but ignoring since store_workspace is 'None'")
-        return
+        return None
 
     # add sync callback, timeout 5 min
     print("Setting workspace snapshot sync callback on session end")
@@ -1213,21 +1224,25 @@ def restore_workspace(task, param):
     except Exception as ex:
         print("ERROR: Could not create workspace folder {}: {}".format(
             param.get("store_workspace"), ex))
-        return
+        return None
 
     if artifact_workspace_name not in task.artifacts:
         print("No workspace snapshot was found, a new workspace snapshot [{}] "
               "will be created when session ends".format(workspace_folder))
-        return
+        return None
 
     print("Fetching previous workspace snapshot")
     artifact_zip_file = task.artifacts[artifact_workspace_name].get_local_copy(extract_archive=False)
+    if not artifact_zip_file:
+        print("Error: Fetching previous workspace snapshot Failed! skipping workspace restore")
+        return None
+
     print("Restoring workspace snapshot")
     try:
         shutil.unpack_archive(artifact_zip_file, extract_dir=workspace_folder.as_posix())
     except Exception as ex:
         print("ERROR: restoring workspace snapshot failed: {}".format(ex))
-        return
+        return None
 
     # remove the workspace from the cache
     try:
@@ -1239,6 +1254,7 @@ def restore_workspace(task, param):
     # set time stamp
     # noinspection PyProtectedMember
     task._set_runtime_properties(runtime_properties={sync_runtime_property: time()})
+    return workspace_folder
 
 
 def main():
@@ -1270,6 +1286,10 @@ def main():
     except Exception as ex:
         print("ERROR: Failed restoring workspace: {}".format(ex))
 
+    # make the new user base folder the workspace directory
+    if (param["store_workspace"] or "").strip():
+        param["user_base_directory"] = param["store_workspace"]
+
     hostname, hostnames = get_host_name(task, param)
 
     env = setup_user_env(param, task)
@@ -1283,6 +1303,9 @@ def main():
     print('We are done - sync workspace if needed')
 
     sync_workspace_snapshot(task, param)
+
+    # sync back python packages for next time
+    # TODO: sync python environment
 
     print('Goodbye')
 

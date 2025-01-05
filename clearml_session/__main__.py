@@ -24,6 +24,7 @@ else:
 import psutil
 from clearml import Task
 from clearml.backend_api.session.client import APIClient, APIError
+from clearml.backend_api.services import tasks
 from clearml.config import config_obj
 from clearml.backend_api import Session
 from .tcp_proxy import TcpProxy
@@ -147,6 +148,27 @@ def _get_available_ports(list_initial_ports):
         )
         available_ports.append(port)
     return available_ports
+
+
+def request_task_abort(task, force=False, status_message=None):
+    res = task.send(
+        tasks.StopRequest(
+            task.id, force=False,
+            status_reason="abort request",
+            status_message=status_message),
+        ignore_errors=True
+    )
+    # if we failed to request, mark it stopped
+    if res and not res.ok():
+        print(f"INFO: failed sending abort request, forcefully stopping task {task.id}")
+        task.mark_stopped(
+            force=force,
+            status_message=status_message,
+            status_reason="abort request failed, setting forcefully"
+        )
+        return True
+
+    return res
 
 
 def create_base_task(state, project_name=None, task_name=None, continue_task_id=None, project_id=None):
@@ -1178,7 +1200,7 @@ def monitor_ssh_tunnel(state, task, ssh_setup_completed_callback=None):
                 continue
             elif user_input.lower() == 'shutdown':
                 print('Shutting down interactive session')
-                task.mark_stopped()
+                request_task_abort(task)
                 shutdown = True
                 break
             elif user_input.lower() in ('r', 'reconnect', ):
@@ -1313,7 +1335,7 @@ class CliCommands:
             print("Warning: skipping session shutdown")
             return 0
 
-        task.mark_stopped()
+        request_task_abort(task)
         print("Session #{} shutdown".format(task.id))
         return 0
 
@@ -1517,7 +1539,7 @@ def cli():
         if not task:
             print("No session to shut down, exiting")
             return 1
-        task.mark_stopped()
+        request_task_abort(task)
         print("Session #{} shut down, goodbye!".format(task.id))
         return 0
 
