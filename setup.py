@@ -1,6 +1,6 @@
 """
 `clearml-session` - CLI for launching JupyterLab / VSCode on a remote machine
-https://github.com/allegroai/clearml-session
+https://github.com/clearml/clearml-session
 """
 
 import os.path
@@ -38,9 +38,9 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     # The project's main homepage.
-    url='https://github.com/allegroai/clearml-session',
-    author='Allegroai',
-    author_email='clearml@allegro.ai',
+    url='https://github.com/clearml/clearml-session',
+    author='ClearML',
+    author_email='clearml@clear.ml',
     license='Apache License 2.0',
     classifiers=[
         'Development Status :: 5 - Production/Stable',

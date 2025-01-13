@@ -1,13 +1,13 @@
 <div align="center">
 
-<a href="https://app.clear.ml"><img src="https://github.com/allegroai/clearml/blob/master/docs/clearml-logo.svg?raw=true" width="250px"></a>
+<a href="https://app.clear.ml"><img src="https://github.com/clearml/clearml/blob/master/docs/clearml-logo.svg?raw=true" width="250px"></a>
 
 ## **`clearml-session` </br> CLI for launching JupyterLab / VSCode / SSH on a remote machine**
 
 ## 🔥 NEW in version `0.13` [Workspace Syncing](#-store-and-synchronize-interactive-session-workspace) 🚀 
 
 
-[![GitHub license](https://img.shields.io/github/license/allegroai/clearml-session.svg)](https://img.shields.io/github/license/allegroai/clearml-session.svg)
+[![GitHub license](https://img.shields.io/github/license/clearml/clearml-session.svg)](https://img.shields.io/github/license/clearml/clearml-session.svg)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/clearml-session.svg)](https://img.shields.io/pypi/pyversions/clearml-session.svg)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/clearml-session.svg)](https://img.shields.io/pypi/v/clearml-session.svg)
 [![PyPI status](https://img.shields.io/pypi/status/clearml-session.svg)](https://pypi.python.org/pypi/clearml-session/)
@@ -35,7 +35,7 @@ Read more about `clearml-agent` and interactive sessions [here](https://clear.ml
 `clearml-session` will automatically create a snapshot of your entire workspace when shutting it down, 
 and later restore into a new session on a different remote machine
 
-> ℹ️ **Remote PyCharm:** You can also work with PyCharm in a remote session over SSH. Use the [PyCharm Plugin](https://github.com/allegroai/clearml-pycharm-plugin) to automatically sync local configurations with a remote session.
+> ℹ️ **Remote PyCharm:** You can also work with PyCharm in a remote session over SSH. Use the [PyCharm Plugin](https://github.com/clearml/clearml-pycharm-plugin) to automatically sync local configurations with a remote session.
 
 
 ### Use-cases for remote interactive sessions:
@@ -46,7 +46,7 @@ and later restore into a new session on a different remote machine
 
 ## Prerequisites:
 * **An SSH client installed on your machine** - To verify, open your terminal and execute `ssh`. If you did not receive an error, we are good to go.
-* At least one `clearml-agent` running on a remote host. See installation [details](https://github.com/allegroai/clearml-agent).
+* At least one `clearml-agent` running on a remote host. See installation [details](https://github.com/clearml/clearml-agent).
 
 Supported OS: MacOS, Windows, Linux
 

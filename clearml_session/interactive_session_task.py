@@ -665,7 +665,7 @@ def setup_ssh_server(hostname, hostnames, param, task, env):
                     print('WARNING: SSHd was not found defaulting to user-space dropbear sshd server')
                     dropbear_download_link = \
                         os.environ.get("CLEARML_DROPBEAR_EXEC") or \
-                        'https://github.com/allegroai/dropbear/releases/download/DROPBEAR_CLEARML_2024.86/dropbearmulti'
+                        'https://github.com/clearml/dropbear/releases/download/DROPBEAR_CLEARML_2024.86/dropbearmulti'
                     dropbear = StorageManager.get_local_copy(dropbear_download_link, extract_archive=False)
                     os.chmod(dropbear, 0o744)
                     sshd_path = dropbear
